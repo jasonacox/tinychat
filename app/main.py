@@ -13,10 +13,12 @@ Author: Jason A. Cox
 License: MIT
 GitHub: https://github.com/jasonacox/tinychat
 """
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # Standard library imports
 import asyncio
+import base64
+import io
 import json
 import logging
 import os
@@ -26,7 +28,9 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, AsyncGenerator
 
 # Third-party imports
+import aiohttp
 import httpx
+from PIL import Image
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
@@ -56,6 +60,25 @@ ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 
 # Research/Logging Configuration
 CHAT_LOG = os.getenv("CHAT_LOG", "")  # Path to JSONL file for logging conversations
+
+# Image Generation Configuration
+IMAGE_PROVIDER = os.getenv("IMAGE_PROVIDER", "swarmui").lower()  # swarmui or openai
+
+# SwarmUI settings
+SWARMUI = os.getenv("SWARMUI", "http://localhost:7801")
+IMAGE_MODEL = os.getenv("IMAGE_MODEL", "Flux/flux1-schnell-fp8")
+IMAGE_CFGSCALE = float(os.getenv("IMAGE_CFGSCALE", "1.0"))
+IMAGE_STEPS = int(os.getenv("IMAGE_STEPS", "6"))
+IMAGE_WIDTH = int(os.getenv("IMAGE_WIDTH", "1024"))
+IMAGE_HEIGHT = int(os.getenv("IMAGE_HEIGHT", "1024"))
+IMAGE_SEED = int(os.getenv("IMAGE_SEED", "-1"))
+IMAGE_TIMEOUT = int(os.getenv("IMAGE_TIMEOUT", "300"))
+
+# OpenAI image settings
+OPENAI_IMAGE_API_KEY = os.getenv("OPENAI_IMAGE_API_KEY", "")
+OPENAI_IMAGE_API_BASE = os.getenv("OPENAI_IMAGE_API_BASE", "https://api.openai.com/v1")
+OPENAI_IMAGE_MODEL = os.getenv("OPENAI_IMAGE_MODEL", "dall-e-3")
+OPENAI_IMAGE_SIZE = os.getenv("OPENAI_IMAGE_SIZE", "1024x1024")
 
 # File lock for thread-safe logging
 _log_lock = asyncio.Lock()
@@ -91,6 +114,11 @@ logger.info(f"  Security: Max message length {MAX_MESSAGE_LENGTH}")
 logger.info(f"  Security: Max conversation history {MAX_CONVERSATION_HISTORY}")
 if CHAT_LOG:
     logger.info(f"  Research: Logging conversations to {CHAT_LOG}")
+logger.info(f"  Image Generation: Provider={IMAGE_PROVIDER}")
+if IMAGE_PROVIDER == "swarmui":
+    logger.info(f"  Image Generation: SwarmUI={SWARMUI}, Model={IMAGE_MODEL}")
+elif IMAGE_PROVIDER == "openai":
+    logger.info(f"  Image Generation: OpenAI Model={OPENAI_IMAGE_MODEL}")
 
 # Security helper functions
 def get_client_ip(request: Request) -> str:
@@ -159,6 +187,152 @@ async def _async_log_conversation(messages: List[Dict], assistant_response: str,
             logger.debug(f"Logged conversation to {CHAT_LOG}")
         except Exception as e:
             logger.error(f"Failed to log conversation: {e}")
+
+async def generate_image(prompt: str) -> dict:
+    """
+    Generate an image using SwarmUI or OpenAI and return a data URI.
+    
+    Args:
+        prompt: The text prompt for image generation
+        
+    Returns:
+        dict: A dictionary containing the prompt and image data URI, or error information
+    """
+    logger.info(f"Image provider: {IMAGE_PROVIDER}")
+    
+    if IMAGE_PROVIDER == "swarmui":
+        logger.info(f"Sending prompt to SwarmUI ({SWARMUI}) model={IMAGE_MODEL}")
+        logger.info(f"Prompt: {prompt}")
+
+        async def _get_session_id(session: aiohttp.ClientSession) -> Optional[str]:
+            try:
+                async with session.post(f"{SWARMUI.rstrip('/')}/API/GetNewSession", json={}, timeout=10) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        return data.get("session_id")
+            except Exception as e:
+                logger.error(f"Error getting session id from SwarmUI: {e}")
+            return None
+
+        async def _call_generate(session: aiohttp.ClientSession, session_id: str, prompt_text: str) -> Optional[str]:
+            params = {
+                "model": IMAGE_MODEL,
+                "width": IMAGE_WIDTH,
+                "height": IMAGE_HEIGHT,
+                "cfgscale": IMAGE_CFGSCALE,
+                "steps": IMAGE_STEPS,
+                "seed": IMAGE_SEED,
+            }
+            raw_input = {"prompt": str(prompt_text), **{k: v for k, v in params.items()}, "donotsave": True}
+            data = {
+                "session_id": session_id,
+                "images": "1",
+                "prompt": str(prompt_text),
+                **{k: str(v) for k, v in params.items()},
+                "donotsave": True,
+                "rawInput": raw_input,
+            }
+            try:
+                async with session.post(f"{SWARMUI.rstrip('/')}/API/GenerateText2Image", json=data, timeout=IMAGE_TIMEOUT) as resp:
+                    if resp.status == 200:
+                        j = await resp.json()
+                        imgs = j.get("images") or []
+                        if imgs:
+                            return imgs[0]
+                    else:
+                        logger.error(f"SwarmUI GenerateText2Image returned status {resp.status}")
+            except Exception as e:
+                logger.error(f"Error calling SwarmUI GenerateText2Image: {e}")
+            return None
+
+        image_encoded = None
+        try:
+            async with aiohttp.ClientSession() as session:
+                session_id = await _get_session_id(session)
+                if not session_id:
+                    logger.error("Unable to obtain SwarmUI session id")
+                    return {"error": "No session"}
+                image_encoded = await _call_generate(session, session_id, prompt)
+        except Exception as e:
+            logger.error(f"Unexpected error during SwarmUI generation: {e}")
+            return {"error": "Generation exception"}
+
+        if not image_encoded:
+            logger.error(f"Image generation failed for prompt: {prompt}")
+            return {"error": "Generation failed"}
+            
+    elif IMAGE_PROVIDER == "openai":
+        logger.info(f"Sending prompt to OpenAI Images API ({OPENAI_IMAGE_API_BASE}) model={OPENAI_IMAGE_MODEL}")
+        logger.info(f"Prompt: {prompt}")
+
+        async def _call_openai(session: aiohttp.ClientSession, prompt_text: str) -> Optional[str]:
+            url = f"{OPENAI_IMAGE_API_BASE.rstrip('/')}/images/generations"
+            headers = {"Authorization": f"Bearer {OPENAI_IMAGE_API_KEY}", "Content-Type": "application/json"}
+            body = {"model": OPENAI_IMAGE_MODEL, "prompt": prompt_text, "size": OPENAI_IMAGE_SIZE}
+            try:
+                async with session.post(url, json=body, headers=headers, timeout=IMAGE_TIMEOUT) as resp:
+                    if resp.status == 200:
+                        j = await resp.json()
+                        data = j.get("data") or []
+                        if data:
+                            first = data[0]
+                            if "b64_json" in first:
+                                return first["b64_json"]
+                            if "url" in first:
+                                # Fetch binary and return as base64
+                                img_url = first["url"]
+                                async with session.get(img_url) as img_resp:
+                                    if img_resp.status == 200:
+                                        b = await img_resp.read()
+                                        return base64.b64encode(b).decode("utf-8")
+                    else:
+                        text = await resp.text()
+                        logger.error(f"OpenAI images API returned {resp.status}: {text}")
+            except Exception as e:
+                logger.error(f"Error calling OpenAI Images API: {e}")
+            return None
+
+        image_encoded = None
+        try:
+            async with aiohttp.ClientSession() as session:
+                image_encoded = await _call_openai(session, prompt)
+        except Exception as e:
+            logger.error(f"Unexpected error during OpenAI generation: {e}")
+            return {"error": "Generation exception"}
+
+        if not image_encoded:
+            logger.error(f"OpenAI image generation failed for prompt: {prompt}")
+            return {"error": "Generation failed"}
+    else:
+        logger.error(f"Unknown IMAGE_PROVIDER: {IMAGE_PROVIDER}")
+        return {"error": "Unsupported image provider"}
+
+    # Normalize to raw base64 payload
+    if "," in image_encoded:
+        image_b64 = image_encoded.split(",", 1)[1]
+    else:
+        image_b64 = image_encoded
+
+    logger.info(f"Received image data (bytes ~ {len(image_b64)})")
+
+    try:
+        image = Image.open(io.BytesIO(base64.b64decode(image_b64)))
+    except Exception:
+        return {"error": "Unable to decode image data"}
+
+    # Resize down for web if necessary
+    max_dim = 1024
+    if image.width > max_dim or image.height > max_dim:
+        image.thumbnail((max_dim, max_dim))
+    # Convert to JPEG for browser-friendliness
+    if image.mode == "RGBA":
+        image = image.convert("RGB")
+    out = io.BytesIO()
+    image.save(out, format="JPEG", quality=90)
+    out_b64 = base64.b64encode(out.getvalue()).decode("utf-8")
+    data_uri = f"data:image/jpeg;base64,{out_b64}"
+
+    return {"prompt": prompt, "image_data": data_uri}
 
 def safe_error_response(message: str, status_code: int = 400):
     """
@@ -240,7 +414,7 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
     return response
 
 # Pydantic models with validation
@@ -470,6 +644,61 @@ async def chat_stream(request: ChatRequest, http_request: Request):
     if request.session_id:
         async with _page_loads_lock:
             _page_loads[request.session_id] = datetime.now()
+    
+    # Check if this is an image generation request
+    last_message = request.messages[-1] if request.messages else None
+    if last_message and last_message.get('role') == 'user':
+        user_content = last_message.get('content', '').strip()
+        if user_content.startswith('/image '):
+            # Extract the image prompt
+            image_prompt = user_content[7:].strip()  # Remove '/image ' prefix
+            
+            if not image_prompt:
+                async def error_gen():
+                    yield f"data: {json.dumps({'content': 'Please provide a prompt for the image. Usage: /image <prompt>'})}\n\n"
+                return StreamingResponse(error_gen(), media_type="text/plain", headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "Content-Type": "text/event-stream"
+                })
+            
+            # Generate image
+            async def image_gen():
+                global _active_generations
+                async with _generations_lock:
+                    _active_generations += 1
+                
+                try:
+                    logger.info(f"Image generation request from {client_ip}: {image_prompt}")
+                    
+                    # Send initial message
+                    yield f"data: {json.dumps({'content': 'Generating image...'})}\n\n"
+                    
+                    # Generate the image
+                    result = await generate_image(image_prompt)
+                    
+                    if "error" in result:
+                        error_msg = f"Error generating image: {result['error']}"
+                        yield f"data: {json.dumps({'content': error_msg})}\n\n"
+                    else:
+                        # Send the image data
+                        response_data = {'image': result['image_data'], 'content': 'Here is your image.'}
+                        yield f"data: {json.dumps(response_data)}\n\n"
+                        
+                        # Log conversation with text only (not full image data)
+                        log_conversation(request.messages, f"[Generated image: {image_prompt}]", "image-gen", 0.0)
+                except Exception as e:
+                    logger.error(f"Error in image generation: {e}\n{traceback.format_exc()}")
+                    yield f"data: {json.dumps({'content': 'Failed to generate image.'})}\n\n"
+                finally:
+                    async with _generations_lock:
+                        _active_generations -= 1
+            
+            return StreamingResponse(image_gen(), media_type="text/plain", headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Content-Type": "text/event-stream"
+            })
     
     # Use provided messages directly (client manages conversation history)
     api_messages = request.messages

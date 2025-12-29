@@ -1,6 +1,6 @@
 # TinyChat
 
-A minimal, lightning-fast chatbot interface for OpenAI-compatible APIs with real-time streaming responses.
+A minimal, lightning-fast chatbot interface for OpenAI-compatible APIs with real-time streaming responses and image generation capabilities.
 
 <img width="700" alt="image" src="https://github.com/user-attachments/assets/4ec87558-31b0-42c1-8502-3c2c2c285eaa" />
 
@@ -57,6 +57,19 @@ docker run -d \
 | `MAX_CONVERSATION_HISTORY` | `50` | Max messages per conversation |
 | `CHAT_LOG` | *(empty)* | Path to JSONL conversation log file |
 | `ENABLE_DEBUG_LOGS` | `false` | Enable detailed debug logging |
+| `IMAGE_PROVIDER` | `swarmui` | Image provider: `swarmui` or `openai` |
+| `SWARMUI` | `http://localhost:7801` | SwarmUI API endpoint |
+| `IMAGE_MODEL` | `Flux/flux1-schnell-fp8` | SwarmUI model name |
+| `IMAGE_CFGSCALE` | `1.0` | SwarmUI CFG scale |
+| `IMAGE_STEPS` | `6` | SwarmUI generation steps |
+| `IMAGE_WIDTH` | `1024` | Image width in pixels |
+| `IMAGE_HEIGHT` | `1024` | Image height in pixels |
+| `IMAGE_SEED` | `-1` | Random seed (-1 for random) |
+| `IMAGE_TIMEOUT` | `300` | Image generation timeout (seconds) |
+| `OPENAI_IMAGE_API_KEY` | *(empty)* | OpenAI API key for image generation |
+| `OPENAI_IMAGE_API_BASE` | `https://api.openai.com/v1` | OpenAI Images API endpoint |
+| `OPENAI_IMAGE_MODEL` | `dall-e-3` | OpenAI image model |
+| `OPENAI_IMAGE_SIZE` | `1024x1024` | OpenAI image size |
 
 ### Compatible APIs
 
@@ -79,6 +92,44 @@ AVAILABLE_MODELS=llama-2-70b-chat,mixtral-8x7b-32768
 OPENAI_API_URL=http://your-api:4000/v1
 AVAILABLE_MODELS=your-model-1,your-model-2
 ```
+
+### Image Generation
+
+TinyChat supports image generation via SwarmUI (local) or OpenAI DALL-E.
+
+<img width="700" alt="image" src="https://github.com/user-attachments/assets/b81b2a09-c251-4435-86c8-aba8369e2267" />
+
+**Using SwarmUI (local)**:
+```bash
+docker run -d \
+  --name tinychat \
+  --network host \
+  -e OPENAI_API_URL=http://localhost:11434/v1 \
+  -e OPENAI_API_KEY=ollama \
+  -e IMAGE_PROVIDER=swarmui \
+  -e SWARMUI=http://localhost:7801 \
+  -e IMAGE_MODEL=Flux/flux1-schnell-fp8 \
+  jasonacox/tinychat:latest
+```
+
+**Using OpenAI DALL-E**:
+```bash
+docker run -d \
+  --name tinychat \
+  -p 8000:8000 \
+  -e OPENAI_API_URL=https://api.openai.com/v1 \
+  -e OPENAI_API_KEY=your-api-key \
+  -e IMAGE_PROVIDER=openai \
+  -e OPENAI_IMAGE_API_KEY=your-api-key \
+  -e OPENAI_IMAGE_MODEL=dall-e-3 \
+  jasonacox/tinychat:latest
+```
+
+**Usage**: In the chat interface, type `/image <your prompt>` to generate an image. For example:
+- `/image A house with a green roof`
+- `/image A futuristic city at sunset`
+
+Generated images display at 25% size and can be clicked to view full size. Download button included.
 
 ### Research Logging
 
@@ -168,6 +219,9 @@ tinychat/
 - **Frontend**: Vanilla JavaScript with Server-Sent Events
 - **Storage**: Browser localStorage (client-side)
 - **Streaming**: SSE for real-time token display
+- **Image Generation**: SwarmUI and OpenAI DALL-E support
+- **Image Processing**: Pillow (PIL) for optimization and format conversion
+- **HTTP Client**: aiohttp for async image API requests
 - **Container**: Docker with multi-architecture support (amd64, arm64)
 
 ### Publishing to Docker Hub
@@ -204,6 +258,21 @@ curl -X POST http://localhost:8000/api/chat/stream \
     "temperature": 0.7,
     "model": "gpt-3.5-turbo"
   }'
+```
+
+**Image Generation**: Use `/image` prefix in user message:
+
+```bash
+curl -X POST http://localhost:8000/api/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {"role": "user", "content": "/image A house with a green roof"}
+    ]
+  }'
+```
+
+Response includes base64-encoded image data URI.
 ```
 
 ### Configuration Endpoint

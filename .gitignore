@@ -213,3 +213,4 @@ venv/
 conversations.json
 mylocal.sh
 docker-run.sh
+example.py
