@@ -1,5 +1,11 @@
 # Release Notes
 
+## v0.2.1 - Image Persistence
+
+- Images now persist in conversation history (stored in localStorage)
+- Image data filtered from API requests to reduce bandwidth
+- Fixed image display when revisiting conversations
+
 ## v0.2.0 - Image Generation
 
 ### New Features
