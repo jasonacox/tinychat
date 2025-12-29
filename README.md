@@ -2,7 +2,7 @@
 
 A minimal, lightning-fast chatbot interface for OpenAI-compatible APIs with real-time streaming responses.
 
-<img width="500" alt="image" src="https://github.com/user-attachments/assets/23317a73-40dd-4fc6-a512-5b430373c8c9" />
+<img width="700" alt="image" src="https://github.com/user-attachments/assets/4ec87558-31b0-42c1-8502-3c2c2c285eaa" />
 
 ## Quick Start
 
