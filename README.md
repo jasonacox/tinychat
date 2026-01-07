@@ -1,6 +1,6 @@
 # TinyChat
 
-A minimal, lightning-fast chatbot interface for OpenAI-compatible APIs with real-time streaming responses and image generation capabilities.
+A minimal, lightning-fast chatbot interface for OpenAI-compatible APIs with real-time streaming responses, markdown & math rendering, and image generation capabilities.
 
 <img width="700" alt="image" src="https://github.com/user-attachments/assets/4ec87558-31b0-42c1-8502-3c2c2c285eaa" />
 
@@ -40,6 +40,19 @@ docker run -d \
 
 # Access at http://localhost:8000
 ```
+
+## Key Features
+
+- **📝 Markdown Rendering**: Full markdown support with syntax-highlighted code blocks
+- **🔢 Math Equations**: Beautiful LaTeX rendering with KaTeX (inline `$...$` and display `$$...$$`)
+- **🎨 Syntax Highlighting**: Code blocks automatically highlighted in 180+ languages
+- **💬 Real-time Streaming**: Server-Sent Events for token-by-token responses
+- **🖼️ Image Generation**: Create images with SwarmUI or OpenAI DALL-E
+- **💾 Client-side Storage**: Conversations persist in browser localStorage
+- **⚙️ Smart Defaults**: Model selection and markdown preferences saved automatically
+- **🔒 Security First**: Content Security Policy, input validation, sanitization
+- **📊 Stateless**: Zero server-side memory, horizontally scalable
+- **🚀 Fast**: Minimal overhead, sub-second startup, efficient streaming
 
 ## Configuration
 
@@ -215,21 +228,29 @@ tinychat/
 
 ### Technology Stack
 
-- **Backend**: FastAPI (async Python web framework)
-- **Frontend**: Vanilla JavaScript with Server-Sent Events
-- **Storage**: Browser localStorage (client-side)
-- **Streaming**: SSE for real-time token display
-- **Image Generation**: SwarmUI and OpenAI DALL-E support
-- **Image Processing**: Pillow (PIL) for optimization and format conversion
-- **HTTP Client**: aiohttp for async image API requests
-- **Container**: Docker with multi-architecture support (amd64, arm64)
+**Backend:**
+- **FastAPI**: Async Python web framework
+- **Pillow (PIL)**: Image optimization and format conversion
+- **aiohttp**: Async HTTP client for image API requests
+
+**Frontend:**
+- **Vanilla JavaScript**: No framework dependencies
+- **Server-Sent Events**: Real-time streaming
+- **marked.js**: Markdown parsing with GFM support
+- **highlight.js**: Syntax highlighting for 180+ languages
+- **KaTeX**: Fast math typesetting
+
+**Storage & Architecture:**
+- **Browser localStorage**: Client-side conversation persistence
+- **Stateless Backend**: Zero server-side storage
+- **Multi-architecture Docker**: Support for amd64 and arm64
 
 ### Publishing to Docker Hub
 
 Update version in `app/main.py`:
 
 ```python
-__version__ = "0.2.0"
+__version__ = "0.2.2"
 ```
 
 Then build and push:
