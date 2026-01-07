@@ -10,6 +10,18 @@
     <link rel="icon" type="image/svg+xml" sizes="32x32" href="/static/favicon-32x32.svg">
     <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.svg">
     
+    <!-- Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+    
+    <!-- Syntax highlighting for code blocks -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    
     <style>
         * {
             margin: 0;
@@ -231,6 +243,121 @@
             border-left-color: #28a745;
         }
 
+        /* Markdown rendering styles */
+        .message-content.markdown {
+            white-space: normal;
+        }
+
+        .message-content.markdown h1,
+        .message-content.markdown h2,
+        .message-content.markdown h3,
+        .message-content.markdown h4,
+        .message-content.markdown h5,
+        .message-content.markdown h6 {
+            margin-top: 16px;
+            margin-bottom: 8px;
+            font-weight: 600;
+            line-height: 1.25;
+        }
+
+        .message-content.markdown h1 { font-size: 1.8em; border-bottom: 1px solid #ddd; padding-bottom: 8px; }
+        .message-content.markdown h2 { font-size: 1.5em; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
+        .message-content.markdown h3 { font-size: 1.25em; }
+        .message-content.markdown h4 { font-size: 1.1em; }
+        .message-content.markdown h5 { font-size: 1em; }
+        .message-content.markdown h6 { font-size: 0.9em; color: #666; }
+
+        .message-content.markdown p {
+            margin-bottom: 12px;
+        }
+
+        .message-content.markdown ul,
+        .message-content.markdown ol {
+            margin-bottom: 12px;
+            padding-left: 24px;
+        }
+
+        .message-content.markdown li {
+            margin-bottom: 4px;
+        }
+
+        .message-content.markdown code {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.9em;
+        }
+
+        .message-content.markdown pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 12px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin-bottom: 12px;
+        }
+
+        .message-content.markdown pre code {
+            background: transparent;
+            padding: 0;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+
+        .message-content.markdown blockquote {
+            border-left: 4px solid #ddd;
+            padding-left: 16px;
+            margin: 12px 0;
+            color: #666;
+            font-style: italic;
+        }
+
+        .message-content.markdown table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 12px;
+        }
+
+        .message-content.markdown table th,
+        .message-content.markdown table td {
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        .message-content.markdown table th {
+            background: #f0f0f0;
+            font-weight: 600;
+        }
+
+        .message-content.markdown table tr:nth-child(even) {
+            background: #fafafa;
+        }
+
+        .message-content.markdown a {
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        .message-content.markdown a:hover {
+            text-decoration: underline;
+        }
+
+        .message-content.markdown hr {
+            border: none;
+            border-top: 2px solid #ddd;
+            margin: 16px 0;
+        }
+
+        .message-content.markdown img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+            margin: 8px 0;
+        }
+
         .chat-input-area {
             padding: 20px;
             border-top: 1px solid #e0e0e0;
@@ -346,6 +473,10 @@
                         <option value="">Loading...</option>
                     </select>
                 </div>
+                <div class="setting-group">
+                    <input type="checkbox" id="markdownToggle" checked>
+                    <label for="markdownToggle">Render Markdown</label>
+                </div>
             </div>
         </div>
 
@@ -387,6 +518,105 @@
 
         // LocalStorage key for conversations
         const STORAGE_KEY = 'tinychat_conversations';
+        const MARKDOWN_PREF_KEY = 'tinychat_markdown_enabled';
+
+        // Configure marked.js with syntax highlighting (will run when DOM loads)
+        function configureMarked() {
+            if (typeof marked !== 'undefined') {
+                console.log('Configuring marked.js version:', marked.VERSION || 'unknown');
+                marked.setOptions({
+                    highlight: function(code, lang) {
+                        if (typeof hljs !== 'undefined' && lang && hljs.getLanguage(lang)) {
+                            try {
+                                return hljs.highlight(code, { language: lang }).value;
+                            } catch (e) {
+                                console.error('Highlight error:', e);
+                            }
+                        }
+                        return code;
+                    },
+                    breaks: true,
+                    gfm: true
+                });
+            } else {
+                console.warn('marked.js library not loaded');
+            }
+        }
+
+        // Get markdown preference
+        function getMarkdownEnabled() {
+            const stored = localStorage.getItem(MARKDOWN_PREF_KEY);
+            return stored === null ? true : stored === 'true';  // Default to true
+        }
+
+        // Save markdown preference
+        function setMarkdownEnabled(enabled) {
+            localStorage.setItem(MARKDOWN_PREF_KEY, enabled.toString());
+        }
+
+        // Render math equations in an element using KaTeX
+        function renderMath(element) {
+            if (typeof renderMathInElement !== 'undefined') {
+                try {
+                    renderMathInElement(element, {
+                        delimiters: [
+                            {left: '$$', right: '$$', display: true},
+                            {left: '$', right: '$', display: false},
+                            {left: '\\[', right: '\\]', display: true},
+                            {left: '\\(', right: '\\)', display: false}
+                        ],
+                        throwOnError: false,
+                        strict: false
+                    });
+                } catch (e) {
+                    console.error('KaTeX rendering error:', e);
+                }
+            }
+        }
+
+        // Process content with markdown and math rendering
+        function renderMarkdownWithMath(content) {
+            if (typeof marked === 'undefined') {
+                return content;
+            }
+
+            // Step 1: Extract LaTeX blocks to protect them from markdown processing
+            const mathBlocks = [];
+            let processedContent = content;
+            
+            // Extract display math blocks ($$...$$)
+            processedContent = processedContent.replace(/\$\$([\s\S]+?)\$\$/g, (match, math) => {
+                const placeholder = `MATHBLOCK${mathBlocks.length}PLACEHOLDER`;
+                mathBlocks.push({ type: 'display', content: math.trim() });
+                return placeholder;
+            });
+            
+            // Extract inline math ($...$) - but not $$ which we already handled
+            processedContent = processedContent.replace(/\$([^\$\n]+?)\$/g, (match, math) => {
+                const placeholder = `MATHINLINE${mathBlocks.length}PLACEHOLDER`;
+                mathBlocks.push({ type: 'inline', content: math.trim() });
+                return placeholder;
+            });
+
+            // Step 2: Process markdown
+            const html = typeof marked.parse === 'function' ? marked.parse(processedContent) : marked(processedContent);
+            
+            // Step 3: Restore LaTeX blocks
+            let finalHtml = html;
+            mathBlocks.forEach((block, index) => {
+                if (block.type === 'display') {
+                    const placeholder = `MATHBLOCK${index}PLACEHOLDER`;
+                    const mathHtml = `<div class="math-display">$$${block.content}$$</div>`;
+                    finalHtml = finalHtml.replace(new RegExp(placeholder, 'g'), mathHtml);
+                } else {
+                    const placeholder = `MATHINLINE${index}PLACEHOLDER`;
+                    const mathHtml = `<span class="math-inline">$${block.content}$</span>`;
+                    finalHtml = finalHtml.replace(new RegExp(placeholder, 'g'), mathHtml);
+                }
+            });
+            
+            return finalHtml;
+        }
 
         // Local storage helper functions
         function getConversations() {
@@ -465,6 +695,9 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', async function() {
+            // Configure markdown library
+            configureMarked();
+            
             // Track session for analytics
             try {
                 const sessionResponse = await fetch('/api/session' + (sessionId ? `?session_id=${sessionId}` : ''));
@@ -545,6 +778,17 @@
             temperatureSlider.addEventListener('input', function() {
                 temperatureValue.textContent = this.value;
             });
+
+            // Markdown toggle listener
+            const markdownToggle = document.getElementById('markdownToggle');
+            markdownToggle.checked = getMarkdownEnabled();
+            markdownToggle.addEventListener('change', function() {
+                setMarkdownEnabled(this.checked);
+                // Reload current conversation to re-render messages
+                if (currentConversationId) {
+                    loadConversation(currentConversationId);
+                }
+            });
         }
 
         async function loadConversations() {
@@ -623,7 +867,12 @@
             document.querySelectorAll('.conversation-item').forEach(item => {
                 item.classList.remove('active');
             });
-            event.target.closest('.conversation-item')?.classList.add('active');
+            
+            // Find and mark the conversation item as active
+            const activeItem = document.querySelector(`.conversation-item [onclick*="'${conversationId}'"]`)?.closest('.conversation-item');
+            if (activeItem) {
+                activeItem.classList.add('active');
+            }
             
             const conversation = getConversation(conversationId);
             if (!conversation) {
@@ -635,7 +884,7 @@
             container.innerHTML = '';
             
             conversation.messages.forEach(message => {
-                const messageDiv = addMessageToUI(message.role, message.content, message.timestamp);
+                const messageDiv = addMessageToUI(message.role, message.content, message.timestamp, message.role === 'assistant');
                 
                 // If this message has a stored image, render it
                 if (message.has_image && message.image_data) {
@@ -845,11 +1094,36 @@
                                 
                                 if (parsed.content) {
                                     if (!assistantMessageElement) {
-                                        assistantMessageElement = addMessageToUI('assistant', '');
+                                        assistantMessageElement = addMessageToUI('assistant', '', null, true);
                                     }
                                     
                                     assistantContent += parsed.content;
-                                    assistantMessageElement.querySelector('.message-content').textContent = assistantContent;
+                                    const messageContent = assistantMessageElement.querySelector('.message-content');
+                                    const markdownEnabled = getMarkdownEnabled();
+                                    
+                                    if (markdownEnabled && typeof marked !== 'undefined') {
+                                        try {
+                                            // Render markdown with math protection
+                                            const html = renderMarkdownWithMath(assistantContent);
+                                            messageContent.innerHTML = html;
+                                            messageContent.classList.add('markdown');
+                                            // Apply syntax highlighting to code blocks
+                                            if (typeof hljs !== 'undefined') {
+                                                messageContent.querySelectorAll('pre code').forEach(block => {
+                                                    hljs.highlightElement(block);
+                                                });
+                                            }
+                                            // Render math equations
+                                            renderMath(messageContent);
+                                        } catch (e) {
+                                            console.error('Markdown parsing error:', e);
+                                            messageContent.textContent = assistantContent;
+                                            messageContent.classList.remove('markdown');
+                                        }
+                                    } else {
+                                        messageContent.textContent = assistantContent;
+                                        messageContent.classList.remove('markdown');
+                                    }
                                     scrollToBottom();
                                 }
                                 
@@ -968,7 +1242,7 @@
             }
         }
 
-        function addMessageToUI(role, content, timestamp) {
+        function addMessageToUI(role, content, timestamp, useMarkdown = false) {
             const container = document.getElementById('messages');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${role}`;
@@ -992,7 +1266,33 @@
             
             const messageContent = document.createElement('div');
             messageContent.className = 'message-content';
-            messageContent.textContent = content;  // Use textContent to prevent XSS
+            
+            // Apply markdown rendering if enabled and requested
+            const markdownEnabled = getMarkdownEnabled();
+            console.log('addMessageToUI:', {role, useMarkdown, markdownEnabled, markedAvailable: typeof marked !== 'undefined'});
+            
+            if (useMarkdown && markdownEnabled && role === 'assistant' && typeof marked !== 'undefined') {
+                try {
+                    // Render markdown with math protection
+                    const html = renderMarkdownWithMath(content);
+                    messageContent.innerHTML = html;
+                    messageContent.classList.add('markdown');
+                    console.log('Markdown rendered successfully');
+                    // Apply syntax highlighting to code blocks
+                    if (typeof hljs !== 'undefined') {
+                        messageContent.querySelectorAll('pre code').forEach(block => {
+                            hljs.highlightElement(block);
+                        });
+                    }
+                    // Render math equations
+                    renderMath(messageContent);
+                } catch (e) {
+                    console.error('Markdown parsing error:', e);
+                    messageContent.textContent = content;  // Fallback to plain text
+                }
+            } else {
+                messageContent.textContent = content;  // Use textContent to prevent XSS
+            }
             
             messageDiv.appendChild(messageHeader);
             messageDiv.appendChild(messageContent);
