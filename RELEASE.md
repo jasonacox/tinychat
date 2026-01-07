@@ -1,5 +1,35 @@
 # Release Notes
 
+## v0.2.2 - Markdown & Math Rendering
+
+### New Features
+- **Markdown Rendering**: Assistant responses now render markdown formatting
+  - Toggle option in settings to enable/disable markdown rendering (enabled by default)
+  - Support for headings, lists, tables, blockquotes, and inline formatting
+  - Protected LaTeX extraction prevents markdown from corrupting math equations
+  - Preference persists in localStorage
+- **Syntax Highlighting**: Code blocks automatically highlighted with highlight.js
+  - GitHub Dark theme for consistent code display
+  - Support for multiple programming languages
+- **Math Equation Rendering**: LaTeX equations rendered beautifully with KaTeX
+  - Inline math: `$equation$`
+  - Display math: `$$equation$$`
+  - Support for complex formulas, fractions, square roots, and mathematical notation
+- **Model Selection Persistence**: Selected model now saved to localStorage
+  - Automatically restores last used model on page reload
+  - Falls back to default model if saved model unavailable
+
+### Improvements
+- Enhanced Content Security Policy to allow CDN resources for libraries
+  - Added support for cdn.jsdelivr.net and cdnjs.cloudflare.com
+  - Properly configured script-src, style-src, and font-src directives
+- Removed debug console logging for cleaner browser console output
+
+### Dependencies
+- Added **marked.js** (v11.1.1) for markdown parsing
+- Added **highlight.js** (v11.9.0) for code syntax highlighting
+- Added **KaTeX** (v0.16.9) for math equation rendering
+
 ## v0.2.1 - Image Persistence
 
 - Images now persist in conversation history (stored in localStorage)
