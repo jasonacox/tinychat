@@ -519,6 +519,7 @@
         // LocalStorage key for conversations
         const STORAGE_KEY = 'tinychat_conversations';
         const MARKDOWN_PREF_KEY = 'tinychat_markdown_enabled';
+        const MODEL_PREF_KEY = 'tinychat_selected_model';
 
         // Configure marked.js with syntax highlighting (will run when DOM loads)
         function configureMarked() {
@@ -552,6 +553,16 @@
         // Save markdown preference
         function setMarkdownEnabled(enabled) {
             localStorage.setItem(MARKDOWN_PREF_KEY, enabled.toString());
+        }
+
+        // Get saved model preference
+        function getSavedModel() {
+            return localStorage.getItem(MODEL_PREF_KEY);
+        }
+
+        // Save model preference
+        function saveModelPreference(model) {
+            localStorage.setItem(MODEL_PREF_KEY, model);
         }
 
         // Render math equations in an element using KaTeX
@@ -721,11 +732,16 @@
                 const modelSelect = document.getElementById('model');
                 modelSelect.innerHTML = '';
                 
+                const savedModel = getSavedModel();
+                let modelToSelect = savedModel && appConfig.available_models.includes(savedModel) 
+                    ? savedModel 
+                    : appConfig.default_model;
+                
                 appConfig.available_models.forEach(model => {
                     const option = document.createElement('option');
                     option.value = model;
                     option.textContent = model;
-                    if (model === appConfig.default_model) {
+                    if (model === modelToSelect) {
                         option.selected = true;
                     }
                     modelSelect.appendChild(option);
@@ -788,6 +804,12 @@
                 if (currentConversationId) {
                     loadConversation(currentConversationId);
                 }
+            });
+
+            // Model selection listener
+            const modelSelect = document.getElementById('model');
+            modelSelect.addEventListener('change', function() {
+                saveModelPreference(this.value);
             });
         }
 
@@ -1269,7 +1291,6 @@
             
             // Apply markdown rendering if enabled and requested
             const markdownEnabled = getMarkdownEnabled();
-            console.log('addMessageToUI:', {role, useMarkdown, markdownEnabled, markedAvailable: typeof marked !== 'undefined'});
             
             if (useMarkdown && markdownEnabled && role === 'assistant' && typeof marked !== 'undefined') {
                 try {
@@ -1277,7 +1298,6 @@
                     const html = renderMarkdownWithMath(content);
                     messageContent.innerHTML = html;
                     messageContent.classList.add('markdown');
-                    console.log('Markdown rendered successfully');
                     // Apply syntax highlighting to code blocks
                     if (typeof hljs !== 'undefined') {
                         messageContent.querySelectorAll('pre code').forEach(block => {
