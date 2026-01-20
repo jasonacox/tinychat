@@ -1,5 +1,14 @@
 # Release Notes
 
+## v0.2.3 - Math & Currency Fixes
+
+### Bug Fixes
+- **Math & Currency Rendering**: Fixed conflict where currency amounts (e.g., "$3.50") were incorrectly interpreted as math equations.
+  - Implemented strict isolation for currency symbols to prevent math parser collisions.
+  - Added support for left-aligned display equations using `fleqn`.
+  - Fixed issues with table rendering containing math equations.
+  - Improved display math restoration for consistency (`$$...$$` handling).
+
 ## v0.2.2 - Markdown & Math Rendering
 
 ### New Features

@@ -13,7 +13,7 @@ Author: Jason A. Cox
 License: MIT
 GitHub: https://github.com/jasonacox/tinychat
 """
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 
 # Standard library imports
 import asyncio

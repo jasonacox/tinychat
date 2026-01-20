@@ -130,9 +130,9 @@ run_dev_local() {
     pip install -r requirements.txt
     
     # Run with custom settings for local testing
-    echo_info "Starting FastAPI server with local config on http://127.0.0.1:$port..."
+    echo_info "Starting FastAPI server with local config on http://0.0.0.0:$port..."
     uvicorn app.main:app \
-        --host 127.0.0.1 \
+        --host 0.0.0.0 \
         --port $port \
         --reload \
         --reload-dir app \

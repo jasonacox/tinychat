@@ -244,6 +244,15 @@
         }
 
         /* Markdown rendering styles */
+        .katex-display {
+           text-align: left !important;
+           margin-left: 0px !important;
+        }
+
+        .katex-display > .katex {
+            text-align: left !important;
+        }
+
         .message-content.markdown {
             white-space: normal;
         }
@@ -444,6 +453,10 @@
                 gap: 10px;
                 align-items: flex-start;
             }
+
+            .message-input {
+                font-size: 16px;
+            }
         }
     </style>
 </head>
@@ -572,10 +585,10 @@
                     renderMathInElement(element, {
                         delimiters: [
                             {left: '$$', right: '$$', display: true},
-                            {left: '$', right: '$', display: false},
                             {left: '\\[', right: '\\]', display: true},
                             {left: '\\(', right: '\\)', display: false}
                         ],
+                        fleqn: true,
                         throwOnError: false,
                         strict: false
                     });
@@ -594,11 +607,29 @@
             // Step 1: Extract LaTeX blocks to protect them from markdown processing
             const mathBlocks = [];
             let processedContent = content;
+
+            // Escape currency: $ followed by digit
+            // Use a unique placeholder that doesn't contain $
+            processedContent = processedContent.replace(/\$(?=[0-9])/g, '___CURRENCY_SYMBOL_PLACEHOLDER___');
             
             // Extract display math blocks ($$...$$)
             processedContent = processedContent.replace(/\$\$([\s\S]+?)\$\$/g, (match, math) => {
                 const placeholder = `MATHBLOCK${mathBlocks.length}PLACEHOLDER`;
                 mathBlocks.push({ type: 'display', content: math.trim() });
+                return placeholder;
+            });
+            
+            // Extract display math blocks (\[...\])
+            processedContent = processedContent.replace(/\\\[([\s\S]+?)\\\]/g, (match, math) => {
+                const placeholder = `MATHBLOCK${mathBlocks.length}PLACEHOLDER`;
+                mathBlocks.push({ type: 'display', content: math.trim() });
+                return placeholder;
+            });
+
+            // Extract inline math (\(...\))
+            processedContent = processedContent.replace(/\\\(([\s\S]+?)\\\)/g, (match, math) => {
+                const placeholder = `MATHINLINE${mathBlocks.length}PLACEHOLDER`;
+                mathBlocks.push({ type: 'inline', content: math.trim() });
                 return placeholder;
             });
             
@@ -617,14 +648,17 @@
             mathBlocks.forEach((block, index) => {
                 if (block.type === 'display') {
                     const placeholder = `MATHBLOCK${index}PLACEHOLDER`;
-                    const mathHtml = `<div class="math-display">$$${block.content}$$</div>`;
+                    const mathHtml = `\\[${block.content}\\]`;
                     finalHtml = finalHtml.replace(new RegExp(placeholder, 'g'), mathHtml);
                 } else {
                     const placeholder = `MATHINLINE${index}PLACEHOLDER`;
-                    const mathHtml = `<span class="math-inline">$${block.content}$</span>`;
+                    const mathHtml = `<span class="math-inline">\\(${block.content}\\)</span>`;
                     finalHtml = finalHtml.replace(new RegExp(placeholder, 'g'), mathHtml);
                 }
             });
+            
+            // Convert currency placeholder back to $
+            finalHtml = finalHtml.replace(/___CURRENCY_SYMBOL_PLACEHOLDER___/g, '$');
             
             return finalHtml;
         }
