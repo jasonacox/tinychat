@@ -30,12 +30,24 @@ echo "This will build and push the following images:"
 echo "  - jasonacox/tinychat:${VER}"
 echo "  - jasonacox/tinychat:latest"
 echo ""
+
+# Ask about --no-cache (default: no)
+read -p "Use --no-cache for build? [y/N] " response
+case "$response" in
+    [yY][eE][sS]|[yY]) 
+        CACHE_FLAG="--no-cache"
+        ;;
+    *)
+        CACHE_FLAG=""
+        ;;
+esac
+
 read -p "Press [Enter] to continue or Ctrl-C to cancel..."
 
 # Build and push both tags in single command
 echo ""
 echo "* BUILD jasonacox/tinychat:${VER} and jasonacox/tinychat:latest"
-docker buildx build --no-cache --platform linux/amd64,linux/arm64 --push \
+docker buildx build ${CACHE_FLAG} --platform linux/amd64,linux/arm64 --push \
   -t jasonacox/tinychat:${VER} \
   -t jasonacox/tinychat:latest .
 echo ""
