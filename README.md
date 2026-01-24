@@ -370,6 +370,7 @@ Contributions welcome! Please:
 ## Credits
 
 - **Inspired by**: [TinyLLM](https://github.com/jasonacox/TinyLLM) - Simple LLM proxy
+- **RLM Integration**: [Recursive Language Models](https://github.com/alexzhang13/rlm) - Agentic reasoning framework by Alex L. Zhang, Tim Kraska, and Omar Khattab ([arXiv:2512.24601](https://arxiv.org/abs/2512.24601))
 - **Built with**: [Claude](https://claude.ai) - AI pair programming assistant
 - **Author**: Jason A. Cox ([@jasonacox](https://github.com/jasonacox))
 
