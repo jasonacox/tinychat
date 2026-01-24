@@ -13,7 +13,7 @@ Author: Jason A. Cox
 License: MIT
 GitHub: https://github.com/jasonacox/tinychat
 """
-__version__ = "0.2.3"
+__version__ = "0.3.0"
 
 # Standard library imports
 import asyncio
@@ -22,8 +22,12 @@ import io
 import json
 import logging
 import os
+import queue
+import re
+import time
 import traceback
 import uuid
+import threading
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, AsyncGenerator
 
@@ -37,6 +41,18 @@ from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, Field, validator
+
+# RLM Integration
+try:
+    from rlm import RLM
+    from rlm.utils.parsing import (
+        find_final_answer,
+        format_iteration,
+    )
+    from rlm.utils.prompts import build_user_prompt
+    HAS_RLM = True
+except ImportError:
+    HAS_RLM = False
 
 # Configure logging
 logging.basicConfig(
@@ -87,6 +103,12 @@ _log_lock = asyncio.Lock()
 _active_generations = 0
 _generations_lock = asyncio.Lock()
 
+# RLM-specific configuration
+RLM_TIMEOUT = int(os.getenv("RLM_TIMEOUT", "60"))  # seconds
+MAX_CONCURRENT_RLM = int(os.getenv("MAX_CONCURRENT_RLM", "3"))  # max parallel RLM executions
+_active_rlm_generations = 0
+_rlm_lock = asyncio.Lock()
+
 # Page load tracking for session counting (session_id: timestamp)
 _page_loads: Dict[str, datetime] = {}
 _page_loads_lock = asyncio.Lock()
@@ -112,6 +134,11 @@ logger.info(f"  Available Models: {AVAILABLE_MODELS}")
 logger.info(f"  Default Temperature: {DEFAULT_TEMPERATURE}")
 logger.info(f"  Security: Max message length {MAX_MESSAGE_LENGTH}")
 logger.info(f"  Security: Max conversation history {MAX_CONVERSATION_HISTORY}")
+if HAS_RLM:
+    logger.info(f"  RLM: Enabled (timeout={RLM_TIMEOUT}s, max_concurrent={MAX_CONCURRENT_RLM})")
+    logger.warning(f"  ⚠️  RLM Security: Code execution enabled - use only with trusted users!")
+else:
+    logger.info(f"  RLM: Not available (rlm package not installed)")
 if CHAT_LOG:
     logger.info(f"  Research: Logging conversations to {CHAT_LOG}")
 logger.info(f"  Image Generation: Provider={IMAGE_PROVIDER}")
@@ -441,8 +468,11 @@ class ChatRequest(BaseModel):
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
     model: Optional[str] = None
     session_id: Optional[str] = None
+    rlm: Optional[bool] = False
+    show_rlm_thinking: Optional[bool] = True
     
     @validator('model')
+    @classmethod
     def validate_model(cls, v):
         """Ensure requested model is available."""
         if v is not None and v not in AVAILABLE_MODELS:
@@ -451,6 +481,7 @@ class ChatRequest(BaseModel):
         return v
     
     @validator('messages')
+    @classmethod
     def validate_messages(cls, v):
         """
         Validate message structure and content.
@@ -709,6 +740,251 @@ async def chat_stream(request: ChatRequest, http_request: Request):
     # Use provided messages directly (client manages conversation history)
     api_messages = request.messages
     
+    if request.rlm:
+        if not HAS_RLM:
+            async def rlm_missing_gen():
+                yield f"data: {json.dumps({'error': 'RLM module not installed. Please rebuild the container with RLM support.'})}\n\n"
+            return StreamingResponse(rlm_missing_gen(), media_type="text/event-stream")
+
+        async def rlm_generate():
+            global _active_generations, _active_rlm_generations
+            async with _generations_lock:
+                _active_generations += 1
+            
+            # Check RLM concurrency limit
+            async with _rlm_lock:
+                if _active_rlm_generations >= MAX_CONCURRENT_RLM:
+                    yield f"data: {json.dumps({'error': 'Too many concurrent RLM requests. Please try again later.'})}\n\n"
+                    async with _generations_lock:
+                        _active_generations -= 1
+                    return
+                _active_rlm_generations += 1
+            
+            try:
+                logger.info(f"RLM generation request from {client_ip} for model: {model_to_use} (active RLM: {_active_rlm_generations})")
+                # Always send a startup indicator
+                if request.show_rlm_thinking:
+                    thinking_msg = json.dumps({'content': '> [RLM Startup...]\n\n'})
+                    yield f"data: {thinking_msg}\n\n"
+                else:
+                    # Send a brief status when not showing thinking
+                    thinking_msg = json.dumps({'content': '🧠 *RLM is thinking...*\n\n'})
+                    yield f"data: {thinking_msg}\n\n"
+                
+                # Prepare RLM
+                rlm_inst = RLM(
+                    backend="openai",
+                    backend_kwargs={
+                        "model_name": model_to_use,
+                        "api_key": OPENAI_API_KEY,
+                        "base_url": OPENAI_API_URL,
+                    },
+                    verbose=False,
+                )
+                
+                rlm_query = api_messages[-1]["content"] if api_messages else ""
+                message_queue = queue.Queue()  # Thread-safe queue instead of list
+                thread_done = threading.Event()
+                start_time = time.time()
+
+                def rlm_worker():
+                    try:
+                        with rlm_inst._spawn_completion_context(rlm_query) as (lm_handler, environment):
+                            message_history = rlm_inst._setup_prompt(rlm_query)
+                            for i in range(rlm_inst.max_iterations):
+                                # Check if we've exceeded timeout
+                                if time.time() - start_time > RLM_TIMEOUT:
+                                    message_queue.put({"type": "error", "content": f"RLM timeout after {RLM_TIMEOUT}s"})
+                                    return
+                                # Determine counts
+                                context_count = 1
+                                if hasattr(environment, "get_context_count"):
+                                    context_count = environment.get_context_count()
+                                
+                                history_count = 0
+                                if hasattr(environment, "get_history_count"):
+                                    history_count = environment.get_history_count()
+
+                                current_prompt = message_history + [
+                                    build_user_prompt(None, i, context_count, history_count)
+                                ]
+                                
+                                # Send status for both thinking and non-thinking modes
+                                if request.show_rlm_thinking:
+                                    message_queue.put({
+                                        "type": "status", 
+                                        "content": f"\n\n---\n#### 🧠 Iteration {i+1} Thinking\n"
+                                    })
+                                else:
+                                    message_queue.put({
+                                        "type": "brief_status", 
+                                        "content": f"Iteration {i+1}..."
+                                    })
+
+                                iteration = rlm_inst._completion_turn(
+                                    prompt=current_prompt,
+                                    lm_handler=lm_handler,
+                                    environment=environment,
+                                )
+                                
+                                # reasoning
+                                reasoning_styled = iteration.response.replace('\n', '\n> ')
+                                
+                                # Gather execution outputs to check for implicit results
+                                execution_outputs = ""
+                                for cb in iteration.code_blocks:
+                                    if cb.result.stdout:
+                                        execution_outputs += cb.result.stdout + "\n"
+
+                                # --- Smart Variable Resolution for Reasoning display ---
+                                def _resolve_val(val_str):
+                                    v = val_str.strip().strip('"').strip("'")
+                                    if v.isidentifier():
+                                        if hasattr(environment, 'locals') and v in environment.locals:
+                                            return str(environment.locals[v])
+                                        elif hasattr(environment, 'execute_code'):
+                                            cr = environment.execute_code(f"print({v})")
+                                            if not cr.stderr: return cr.stdout.strip()
+                                    return v
+
+                                # Replace FINAL(var) or FINAL_VAR(var) with their resolved values in the thinking view
+                                reasoning_styled = re.sub(r'FINAL(?:_VAR)?\((.*?)\)', lambda m: f"**{_resolve_val(m.group(1))}**", reasoning_styled)
+
+                                update = f"\n> **Reasoning:**\n> {reasoning_styled}\n"
+                                for cb in iteration.code_blocks:
+                                    if cb.code.strip():
+                                        code_styled = cb.code.replace('\n', '\n> ')
+                                        stdout_styled = str(cb.result.stdout).replace('\n', '\n> ') if cb.result.stdout else ''
+                                        
+                                        # Smart Output Capture: If no stdout, try to show the value of the last assignment
+                                        if not stdout_styled and not cb.result.stderr:
+                                            try:
+                                                lines = [l for l in cb.code.strip().split('\n') if l.strip()]
+                                                if lines:
+                                                    last_line = lines[-1].strip()
+                                                    if '=' in last_line and not any(last_line.startswith(p) for p in ['if ', 'for ', 'while ', 'def ', 'class ']):
+                                                        part = last_line.split('=')[0].strip()
+                                                        var_name = part.split(':')[-1].strip() if ':' in part else part
+                                                        if var_name.isidentifier():
+                                                            val = _resolve_val(var_name)
+                                                            if val != var_name:
+                                                                stdout_styled = f"[Variable {var_name} = {val}]"
+                                                    elif last_line.isidentifier():
+                                                        val = _resolve_val(last_line)
+                                                        if val != last_line:
+                                                            stdout_styled = f"[Value = {val}]"
+                                            except: pass
+                                        
+                                        if not stdout_styled:
+                                            stdout_styled = '[No Output]'
+
+                                        update += f"\n> **REPL Code:**\n> ```python\n> {code_styled}\n> ```\n"
+                                        update += f"> **Result:**\n> ```\n> {stdout_styled}\n> ```\n"
+                                
+                                message_queue.put({"type": "update", "content": update})
+                                
+                                final_answer = find_final_answer(iteration.response, environment=environment)
+                                
+                                # Fallback: If model says it's done but didn't use FINAL() properly, 
+                                # or if the task was "print something" and it did print it in REPL.
+                                if final_answer is None and ("final answer" in iteration.response.lower() or "completed" in iteration.response.lower()):
+                                    if execution_outputs.strip():
+                                        # Use the execution output as the final answer if available
+                                        final_answer = execution_outputs.strip()
+                                    else:
+                                        # Use the LLM's own words but strip the FINAL() if it was malformed
+                                        final_answer = iteration.response
+                                
+                                if final_answer is not None:
+                                    # Clean up the final answer from potential wrapping quotes if from FINAL()
+                                    if isinstance(final_answer, str):
+                                        final_answer = final_answer.strip().strip('"').strip("'")
+                                        
+                                        # Smart Variable Resolution
+                                        # If the model used FINAL(var) instead of FINAL_VAR("var"), 
+                                        # detect if the resulting string is actually a variable in the REPL.
+                                        if final_answer.isidentifier():
+                                            # For Local Environment (common for development)
+                                            if hasattr(environment, 'locals') and final_answer in environment.locals:
+                                                final_answer = str(environment.locals[final_answer])
+                                            # For Remote Environments (Docker/Modal/etc)
+                                            elif hasattr(environment, 'execute_code'):
+                                                check_res = environment.execute_code(f"print({final_answer})")
+                                                if not check_res.stderr:
+                                                    final_answer = check_res.stdout.strip()
+
+                                    message_queue.put({"type": "final", "content": final_answer})
+                                    return
+                                
+                                # Format for next turn
+                                message_history.extend(format_iteration(iteration))
+                    except Exception as e:
+                        logger.error(f"RLM Worker Exception: {str(e)}\n{traceback.format_exc()}")
+                        message_queue.put({"type": "error", "content": f"RLM Worker Error: {str(e)}"})
+                    finally:
+                        thread_done.set()
+
+                # Start worker as daemon thread (auto-cleanup on exit)
+                worker_thread = threading.Thread(target=rlm_worker, daemon=True)
+                worker_thread.start()
+                
+                assistant_full_content = ""
+                
+                # Process messages with timeout
+                while not thread_done.is_set() or not message_queue.empty():
+                    try:
+                        msg = message_queue.get(timeout=0.1)
+                        if msg["type"] in ["status", "update"]:
+                            if request.show_rlm_thinking:
+                                yield f"data: {json.dumps({'content': msg['content']})}\n\n"
+                            assistant_full_content += msg['content']
+                        elif msg["type"] == "brief_status":
+                            # Always send brief status (for non-thinking mode indicator)
+                            yield f"data: {json.dumps({'rlm_status': msg['content']})}\n\n"
+                        elif msg["type"] == "final":
+                            final_msg = msg['content']
+                            if request.show_rlm_thinking:
+                                final_answer_header = f"\n\n---\n### ✅ Final Answer\n\n"
+                                yield f"data: {json.dumps({'content': final_answer_header + final_msg})}\n\n"
+                                assistant_full_content += final_answer_header + final_msg
+                            else:
+                                yield f"data: {json.dumps({'content': final_msg})}\n\n"
+                                assistant_full_content += final_msg
+                        elif msg["type"] == "error":
+                            yield f"data: {json.dumps({'error': msg['content']})}\n\n"
+                        message_queue.task_done()
+                    except queue.Empty:
+                        # Check for overall timeout
+                        if time.time() - start_time > RLM_TIMEOUT:
+                            thread_done.set()
+                            yield f"data: {json.dumps({'error': f'RLM execution timeout ({RLM_TIMEOUT}s)'})}\n\n"
+                            break
+                        await asyncio.sleep(0.1)
+
+                # Log conversation for research
+                log_conversation(api_messages, assistant_full_content, f"{model_to_use}-rlm", temp_to_use)
+                
+            except Exception as e:
+                error_msg = f"RLM Generation Error: {str(e)}"
+                logger.error(f"{error_msg}\n{traceback.format_exc()}")
+                yield f"data: {json.dumps({'error': error_msg})}\n\n"
+            finally:
+                async with _generations_lock:
+                    _active_generations -= 1
+                async with _rlm_lock:
+                    _active_rlm_generations -= 1
+                logger.info(f"RLM generation completed from {client_ip} (active RLM: {_active_rlm_generations})")
+
+        return StreamingResponse(
+            rlm_generate(),
+            media_type="text/plain",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Content-Type": "text/event-stream"
+            }
+        )
+
     async def generate():
         global _active_generations
         
