@@ -841,6 +841,7 @@ async def chat_stream(request: ChatRequest, http_request: Request):
                 rlm_query = api_messages[-1]["content"] if api_messages else ""
                 message_queue = queue.Queue()  # Thread-safe queue instead of list
                 thread_done = threading.Event()
+                cancellation_requested = threading.Event()  # Signal for graceful cancellation
                 start_time = time.time()
                 show_thinking = request.show_rlm_thinking  # Pass as param to avoid thread-safety concerns
 
@@ -849,7 +850,12 @@ async def chat_stream(request: ChatRequest, http_request: Request):
                         with rlm_inst._spawn_completion_context(rlm_query) as (lm_handler, environment):
                             message_history = rlm_inst._setup_prompt(rlm_query)
                             for i in range(rlm_inst.max_iterations):
-                                # Check if we've exceeded timeout
+                                # Check for cancellation request (from timeout or other reason)
+                                if cancellation_requested.is_set():
+                                    message_queue.put({"type": "error", "content": f"RLM execution cancelled (timeout: {RLM_TIMEOUT}s)"})
+                                    return
+                                
+                                # Worker thread checks timeout (primary check)
                                 if time.time() - start_time > RLM_TIMEOUT:
                                     message_queue.put({"type": "error", "content": f"RLM timeout after {RLM_TIMEOUT}s"})
                                     return
@@ -894,9 +900,15 @@ async def chat_stream(request: ChatRequest, http_request: Request):
                                         execution_outputs += cb.result.stdout + "\n"
 
                                 # --- Smart Variable Resolution for Reasoning display ---
-                                # SECURITY NOTE: This executes code within the RLM sandboxed environment.
-                                # The RLM package provides isolation via restricted builtins and separate execution contexts.
-                                # Variable names are validated as Python identifiers only.
+                                # SECURITY NOTE: This executes code constructed from string interpolation (f"print({v})")
+                                # within the RLM sandboxed environment. This pattern is acceptable because:
+                                # 1. The RLM package provides sandbox isolation via restricted builtins (no eval/exec/input)
+                                # 2. Variable names are validated with .isidentifier() - only valid Python identifiers allowed
+                                # 3. Execution happens in isolated temp directories with separate execution contexts
+                                # 4. We first try direct variable access (environment.locals) before executing code
+                                # 5. This feature is intended for trusted users in controlled environments only
+                                # The security model depends on the RLM sandbox implementation. See RLM documentation
+                                # at https://github.com/alexzhang13/rlm for sandbox architecture details.
                                 def _resolve_val(val_str):
                                     v = val_str.strip().strip('"').strip("'")
                                     if v.isidentifier():
@@ -1024,11 +1036,17 @@ async def chat_stream(request: ChatRequest, http_request: Request):
                                 assistant_full_content += final_msg
                         elif msg["type"] == "error":
                             yield f"data: {json.dumps({'error': msg['content']})}\n\n"
-                        message_queue.task_done()
                     except queue.Empty:
-                        # Check for overall timeout
+                        # Check for overall timeout (secondary/fallback check)
+                        # NOTE: This is best-effort - the worker thread might continue briefly
+                        # after timeout is signaled, but will check cancellation_requested on next iteration.
                         if time.time() - start_time > RLM_TIMEOUT:
-                            thread_done.set()
+                            if not cancellation_requested.is_set():
+                                cancellation_requested.set()  # Signal worker to stop
+                                logger.warning(f"RLM timeout detected in async loop after {RLM_TIMEOUT}s, signaling cancellation")
+                            # Wait a bit for worker to acknowledge cancellation
+                            if not thread_done.is_set():
+                                await asyncio.sleep(0.5)  # Give worker time to clean up
                             yield f"data: {json.dumps({'error': f'RLM execution timeout ({RLM_TIMEOUT}s)'})}\n\n"
                             break
                         await asyncio.sleep(0.1)
