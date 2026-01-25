@@ -842,8 +842,9 @@ async def chat_stream(request: ChatRequest, http_request: Request):
                 message_queue = queue.Queue()  # Thread-safe queue instead of list
                 thread_done = threading.Event()
                 start_time = time.time()
+                show_thinking = request.show_rlm_thinking  # Pass as param to avoid thread-safety concerns
 
-                def rlm_worker():
+                def rlm_worker(show_thinking_mode):
                     try:
                         with rlm_inst._spawn_completion_context(rlm_query) as (lm_handler, environment):
                             message_history = rlm_inst._setup_prompt(rlm_query)
@@ -866,7 +867,7 @@ async def chat_stream(request: ChatRequest, http_request: Request):
                                 ]
                                 
                                 # Send status for both thinking and non-thinking modes
-                                if request.show_rlm_thinking:
+                                if show_thinking_mode:
                                     message_queue.put({
                                         "type": "status", 
                                         "content": f"\n\n---\n#### 🧠 Iteration {i+1} Thinking\n"
@@ -893,6 +894,9 @@ async def chat_stream(request: ChatRequest, http_request: Request):
                                         execution_outputs += cb.result.stdout + "\n"
 
                                 # --- Smart Variable Resolution for Reasoning display ---
+                                # SECURITY NOTE: This executes code within the RLM sandboxed environment.
+                                # The RLM package provides isolation via restricted builtins and separate execution contexts.
+                                # Variable names are validated as Python identifiers only.
                                 def _resolve_val(val_str):
                                     v = val_str.strip().strip('"').strip("'")
                                     if v.isidentifier():
@@ -929,7 +933,8 @@ async def chat_stream(request: ChatRequest, http_request: Request):
                                                         val = _resolve_val(last_line)
                                                         if val != last_line:
                                                             stdout_styled = f"[Value = {val}]"
-                                            except: pass
+                                            except Exception as e:
+                                                logger.debug(f"Error resolving variable value in REPL smart output capture: {e}")
                                         
                                         if not stdout_styled:
                                             stdout_styled = '[No Output]'
@@ -959,6 +964,12 @@ async def chat_stream(request: ChatRequest, http_request: Request):
                                         # Smart Variable Resolution
                                         # If the model used FINAL(var) instead of FINAL_VAR("var"), 
                                         # detect if the resulting string is actually a variable in the REPL.
+                                        # SECURITY NOTE: This executes code constructed from identifiers (validated via .isidentifier())
+                                        # within the RLM sandboxed environment. The RLM package provides isolation via restricted
+                                        # builtins and separate execution contexts. This is safe only because:
+                                        # 1. RLM runs in a sandboxed REPL with limited globals/builtins
+                                        # 2. Variable names are validated as Python identifiers only
+                                        # 3. This feature is intended for trusted users in controlled environments
                                         if final_answer.isidentifier():
                                             # For Local Environment (common for development)
                                             if hasattr(environment, 'locals') and final_answer in environment.locals:
@@ -980,8 +991,13 @@ async def chat_stream(request: ChatRequest, http_request: Request):
                     finally:
                         thread_done.set()
 
-                # Start worker as daemon thread (auto-cleanup on exit)
-                worker_thread = threading.Thread(target=rlm_worker, daemon=True)
+                # Start worker as daemon thread for automatic cleanup on process exit.
+                # Daemon threads are acceptable here because:
+                # 1. RLM context manager handles cleanup in finally block (thread_done.set())
+                # 2. All I/O operations complete before final answer is sent
+                # 3. Timeout mechanisms ensure threads don't run indefinitely
+                # 4. Message queue ensures all outputs are processed before generator exits
+                worker_thread = threading.Thread(target=rlm_worker, args=(show_thinking,), daemon=True)
                 worker_thread.start()
                 
                 assistant_full_content = ""
@@ -993,7 +1009,7 @@ async def chat_stream(request: ChatRequest, http_request: Request):
                         if msg["type"] in ["status", "update"]:
                             if request.show_rlm_thinking:
                                 yield f"data: {json.dumps({'content': msg['content']})}\n\n"
-                            assistant_full_content += msg['content']
+                                assistant_full_content += msg['content']  # Only accumulate when showing thinking
                         elif msg["type"] == "brief_status":
                             # Always send brief status (for non-thinking mode indicator)
                             yield f"data: {json.dumps({'rlm_status': msg['content']})}\n\n"

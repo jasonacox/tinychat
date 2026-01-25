@@ -183,7 +183,11 @@ python -m pip install -U pip
 pip install -r requirements.txt
 
 # (Optional) Install RLM for Recursive Language Model Support
-pip install git+https://github.com/alexzhang13/rlm.git
+# Copy RLM and install it
+COPY rlm/ ./rlm/
+RUN pip install --no-cache-dir ./rlm/
+# or
+# pip install git+https://github.com/alexzhang13/rlm.git
 
 # Set your API configuration
 export OPENAI_API_URL=https://api.openai.com/v1

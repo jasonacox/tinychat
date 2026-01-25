@@ -62,6 +62,8 @@ New RLM integration works with existing OpenAI-compatible API settings:
 - `OPENAI_API_URL` - Used for both standard chat and RLM backend
 - `OPENAI_API_KEY` - Authentication for LLM access
 - RLM automatically uses the selected model from the UI dropdown
+- `RLM_TIMEOUT` - Execution timeout for RLM operations (default: 300s / 5 minutes)
+- `MAX_CONCURRENT_RLM` - Maximum parallel RLM executions (default: 3)
 
 ### Dependencies
 - Added **rlm** package for recursive language model functionality
