@@ -1168,7 +1168,19 @@
                 });
                 
                 if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
+                    // Try to parse JSON error body for a friendlier message
+                    let errText;
+                    try {
+                        const errBody = await response.json();
+                        if (errBody && errBody.error) {
+                            errText = errBody.detail ? `${errBody.error}: ${errBody.detail}` : errBody.error;
+                        } else {
+                            errText = JSON.stringify(errBody);
+                        }
+                    } catch (e) {
+                        errText = `HTTP ${response.status}`;
+                    }
+                    throw new Error(errText);
                 }
                 
                 await handleStreamResponse(response, conversation);

@@ -40,7 +40,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 # RLM Integration
 try:
@@ -68,7 +68,7 @@ DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gpt-3.5-turbo")
 DEFAULT_TEMPERATURE = float(os.getenv("DEFAULT_TEMPERATURE", "0.7"))
 
 # Security Configuration
-MAX_MESSAGE_LENGTH = int(os.getenv("MAX_MESSAGE_LENGTH", "8000"))  # Max chars per message
+MAX_MESSAGE_LENGTH = int(os.getenv("MAX_MESSAGE_LENGTH", "262144"))  # Max chars per message (default 256k)
 MAX_CONVERSATION_HISTORY = int(os.getenv("MAX_CONVERSATION_HISTORY", "50"))  # Max messages per conversation
 ENABLE_DEBUG_LOGS = os.getenv("ENABLE_DEBUG_LOGS", "false").lower() == "true"
 ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "*").split(",")
@@ -152,8 +152,8 @@ def get_client_ip(request: Request) -> str:
     """
     Extract the client's IP address from the request.
     
-    Checks X-Forwarded-For header first (for proxied requests), 
-    then falls back to direct client host.
+    Checks X-Forwarded-For header first (for proxied requests),
+    then X-Real-IP, then falls back to direct client host.
     
     Args:
         request: The FastAPI Request object
@@ -161,9 +161,14 @@ def get_client_ip(request: Request) -> str:
     Returns:
         str: The client's IP address, or "unknown" if unavailable
     """
-    forwarded = request.headers.get("X-Forwarded-For")
+    forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         return forwarded.split(',')[0].strip()
+    
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    
     return request.client.host if request.client else "unknown"
 
 def log_conversation(messages: List[Dict], assistant_response: str, model: str, temperature: float):
@@ -450,6 +455,33 @@ async def add_security_headers(request: Request, call_next):
     )
     return response
 
+# Request validation handler for clearer errors
+from fastapi.exceptions import RequestValidationError
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Convert Pydantic request validation errors into clearer JSON messages
+    (e.g., when a message exceeds MAX_MESSAGE_LENGTH).
+    """
+    errors = exc.errors()
+    # Look for specific message-too-long validation and return a friendly error
+    for err in errors:
+        msg = err.get("msg", "")
+        loc = err.get("loc", [])
+        if "Message content too long" in msg:
+            detail = msg
+            return JSONResponse(status_code=422, content={
+                "error": "MessageTooLong",
+                "detail": detail,
+                "max_message_length": MAX_MESSAGE_LENGTH,
+                "location": loc,
+            })
+
+    # Fallback: return summarized validation errors
+    simplified = [{"loc": e.get("loc"), "msg": e.get("msg")} for e in errors]
+    return JSONResponse(status_code=422, content={"error": "ValidationError", "detail": simplified})
+
 # Pydantic models with validation
 class ChatRequest(BaseModel):
     """
@@ -464,14 +496,14 @@ class ChatRequest(BaseModel):
         model: LLM model to use, must be in AVAILABLE_MODELS
         session_id: Optional session ID for tracking active users
     """
-    messages: List[Dict[str, str]] = Field(..., min_items=1, max_items=MAX_CONVERSATION_HISTORY)
+    messages: List[Dict[str, str]] = Field(..., min_length=1, max_length=MAX_CONVERSATION_HISTORY)
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
     model: Optional[str] = None
     session_id: Optional[str] = None
     rlm: Optional[bool] = False
     show_rlm_thinking: Optional[bool] = True
     
-    @validator('model')
+    @field_validator('model')
     @classmethod
     def validate_model(cls, v):
         """Ensure requested model is available."""
@@ -480,7 +512,7 @@ class ChatRequest(BaseModel):
             raise ValueError(f"Model must be one of: {', '.join(AVAILABLE_MODELS)}")
         return v
     
-    @validator('messages')
+    @field_validator('messages')
     @classmethod
     def validate_messages(cls, v):
         """
@@ -502,17 +534,41 @@ class ChatRequest(BaseModel):
 @app.get("/", response_class=HTMLResponse)
 async def get_chat_ui():
     """
-    Serve the main chat user interface.
-    
-    Returns the single-page HTML application that provides the chat interface.
-    Handles both development (app/static) and production (static) directory layouts.
-    
+    Serve the main chat user interface. Tries known locations and fails gracefully
+    with a helpful HTML message if the static files are missing.
+
     Returns:
-        HTMLResponse: The rendered HTML page
+        HTMLResponse: The rendered HTML page or a friendly error page
     """
-    html_path = "static/index.html" if os.path.exists("static/index.html") else "app/static/index.html"
-    with open(html_path, "r") as f:
-        return HTMLResponse(f.read())
+    possible_paths = ["static/index.html", "app/static/index.html"]
+
+    for path in possible_paths:
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return HTMLResponse(f.read())
+            except FileNotFoundError:
+                # Race condition, try next candidate
+                logger.error(f"Static file briefly missing when trying to open {path}")
+                continue
+            except Exception as e:
+                logger.error(f"Error reading static file {path}: {e}")
+                break
+
+    # If we reach here, no static index file was available
+    logger.error("Static index.html not found in any expected location; returning friendly error page.")
+    error_html = """
+    <html>
+      <head><title>TinyChat - Missing Static Files</title></head>
+      <body style="font-family: Arial, sans-serif; padding: 2rem;">
+        <h1 style="color:#d9534f">TinyChat: Static files missing</h1>
+        <p>The server could not find <code>index.html</code> in either <code>static/</code> or <code>app/static/</code>.</p>
+        <p>If you are running locally, ensure you are in the project root and that the repository is intact. For development mode, run <code>./local.sh dev</code>.</p>
+        <p>If this service is running inside a container, rebuild or re-deploy the image so the static assets are included.</p>
+      </body>
+    </html>
+    """
+    return HTMLResponse(error_html, status_code=500)
 
 async def stream_openai_response(
     messages: List[Dict], 
@@ -1073,7 +1129,8 @@ async def get_config(http_request: Request):
         "api_configured": bool(OPENAI_API_KEY),
         "max_message_length": MAX_MESSAGE_LENGTH,
         "max_conversation_history": MAX_CONVERSATION_HISTORY,
-        "version": __version__
+        "version": __version__,
+        "has_rlm": HAS_RLM
     }
 
 @app.get("/api/version")
@@ -1102,8 +1159,12 @@ async def create_session(session_id: Optional[str] = None):
     
     async with _page_loads_lock:
         _page_loads[session_id] = datetime.now()
+        active_count = len(_page_loads)
     
-    return {"session_id": session_id}
+    return {
+        "session_id": session_id,
+        "active_sessions": active_count
+    }
 
 
 @app.get("/api/health")

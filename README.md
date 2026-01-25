@@ -174,6 +174,17 @@ Clone and run locally with hot-reload:
 git clone https://github.com/jasonacox/tinychat.git
 cd tinychat
 
+# Create and activate a Python virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Upgrade pip and install Python dependencies
+python -m pip install -U pip
+pip install -r requirements.txt
+
+# (Optional) Install RLM for Recursive Language Model Support
+pip install git+https://github.com/alexzhang13/rlm.git
+
 # Set your API configuration
 export OPENAI_API_URL=https://api.openai.com/v1
 export OPENAI_API_KEY=your-api-key-here
