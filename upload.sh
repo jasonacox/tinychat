@@ -9,18 +9,18 @@ if [ "$last_path" != "tinychat" ]; then
   exit 1
 fi
 
-# Read version from app/main.py
-if [ -f "app/main.py" ]; then
-  VER=$(grep "^__version__ = " app/main.py | cut -d'"' -f2)
-  echo "Version from main.py: ${VER}"
+# Read version from app/__init__.py
+if [ -f "app/__init__.py" ]; then
+  VER=$(grep "^__version__ = " app/__init__.py | cut -d'"' -f2)
+  echo "Version from __init__.py: ${VER}"
 else
-  echo "ERROR: app/main.py not found!"
+  echo "ERROR: app/__init__.py not found!"
   exit 1
 fi
 
 # Verify version was found
 if [ -z "$VER" ]; then
-  echo "ERROR: Could not extract version from app/main.py"
+  echo "ERROR: Could not extract version from app/__init__.py"
   exit 1
 fi
 
