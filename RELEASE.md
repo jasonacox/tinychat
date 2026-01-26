@@ -1,6 +1,6 @@
 # Release Notes
 
-## v0.3.0 - RLM Integration & Enhanced UI
+## v0.3.0 - Add RLM and Image Upload Support
 
 ### Major Features
 - **RLM (Recursive Language Model) Integration**: Added support for agentic reasoning workflows
@@ -13,6 +13,16 @@
   - Real-time streaming of reasoning steps, code execution, and intermediate results
   - Status indicator shows RLM progress when thinking details are hidden
   - Both RLM toggle states persist in localStorage across sessions
+
+- **Image Upload Support for Vision Models**: Added comprehensive image handling capabilities
+  - Drag-and-drop or attach images (📎 button) to conversations
+  - Support for vision-enabled models with OpenAI-compatible API format
+  - Automatic image compression and base64 encoding for efficient storage
+  - Smart localStorage management with automatic cleanup and quota handling
+  - Thumbnail display in chat interface with click-to-enlarge modal viewer
+  - Images persist across page refreshes and conversation history
+  - Graceful error handling for non-vision models
+  - Intelligent image filtering (keeps only most recent image per message)
 
 ### RLM Features
 - **Thinking Mode Display**:
@@ -32,6 +42,12 @@
   - Fallback to execution output if FINAL() macro is malformed
 
 ### UI Improvements
+- **Image Upload Interface**: Intuitive drag-and-drop interface for image attachments
+  - Click-to-attach button (📎) in message input area
+  - Visual feedback during drag-and-drop operations
+  - Image thumbnail preview in chat messages
+  - Modal viewer for full-size image viewing
+  - Responsive image display in conversation thread
 - **Fixed Footer Scrolling**: Footer now stays locked at bottom of viewport
   - Added overflow constraints to body and main-content containers
   - Chat messages scroll independently within their container
@@ -45,12 +61,25 @@
   - Consistent with other UI preferences (markdown, model selection)
 
 ### Technical Improvements
+- **Image Processing Pipeline**:
+  - New image service module for handling uploads and compression
+  - Base64 encoding with automatic format detection (JPEG, PNG, WebP, GIF)
+  - Intelligent compression to optimize storage size
+  - OpenAI vision API format with proper message content structuring
+  - Storage quota management to prevent localStorage overflow
+  - Enhanced chat schemas to support multi-part messages with images
 - **Backend Architecture**:
   - Graceful RLM import handling with HAS_RLM flag
   - Background threading for RLM execution to prevent blocking
   - Queue-based message passing for real-time status updates
   - Separate streaming paths for thinking vs. non-thinking modes
   - Enhanced error handling and logging for RLM operations
+  - Updated message schemas with ImageContent support
+- **Frontend Modular Architecture**:
+  - New utilities module for image handling (utils/image.js)
+  - Enhanced storage utilities with image-specific methods
+  - Improved component organization for chat and sidebar
+  - Event-driven architecture for image upload interactions
 - **Code Quality**:
   - Fixed Pydantic validator warnings (added @classmethod decorators)
   - Improved code organization with helper functions
