@@ -9,12 +9,18 @@ from typing import List
 
 logger = logging.getLogger("tinychat")
 
+# Import version from package
+try:
+    from app import __version__
+except ImportError:
+    __version__ = "unknown"
+
 
 class Settings:
     """Application settings loaded from environment variables."""
     
-    # Version
-    VERSION = "0.3.0"
+    # Version (imported from app/__init__.py)
+    VERSION = __version__
     
     # API Configuration
     OPENAI_API_URL: str = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1")
