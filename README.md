@@ -260,8 +260,24 @@ tinychat/
 │   │   ├── error_handlers.py     # Error formatting
 │   │   └── state.py              # Session/generation tracking
 │   └── static/
-│       ├── index.html            # Single-page frontend UI
-│       └── favicon*.svg          # Icons
+│       ├── index.html            # Minimal HTML structure (~110 lines)
+│       ├── favicon*.svg          # Icons
+│       ├── css/                  # Modular stylesheets
+│       │   ├── base.css          # Reset, variables, utilities
+│       │   ├── layout.css        # Main structure, header, footer
+│       │   ├── sidebar.css       # Conversation list styling
+│       │   ├── components.css    # Buttons, inputs, modals
+│       │   └── chat.css          # Message and markdown styles
+│       └── js/                   # Organized JavaScript modules
+│           ├── app.js            # Main initialization & event listeners
+│           ├── config.js         # Configuration management
+│           ├── components/       # UI components
+│           │   ├── chat.js       # Messaging & streaming logic
+│           │   ├── sidebar.js    # Conversation management
+│           │   └── rlm-security.js # RLM authentication
+│           └── utils/            # Utility functions
+│               ├── storage.js    # localStorage management
+│               └── markdown.js   # Markdown & math rendering
 ├── Dockerfile                    # Multi-stage build
 ├── requirements.txt              # Python dependencies
 ├── docker-run.sh                # Docker deployment script
@@ -275,6 +291,7 @@ tinychat/
 - **Minimal main.py**: 69 lines (was 1337) - just app initialization and routing
 - **Service Layer**: Business logic isolated for easy testing and maintenance
 - **API Versioning**: v1 endpoints ready for future API evolution
+- **Modular Frontend**: Organized CSS and JavaScript for maintainability
 - **Easy to Extend**: Adding features (like document processing) is straightforward
 
 ### Technology Stack
@@ -285,11 +302,16 @@ tinychat/
 - **aiohttp**: Async HTTP client for image API requests
 
 **Frontend:**
+- **Modular Architecture**: Separated HTML, CSS, and JavaScript
 - **Vanilla JavaScript**: No framework dependencies
 - **Server-Sent Events**: Real-time streaming
 - **marked.js**: Markdown parsing with GFM support
 - **highlight.js**: Syntax highlighting for 180+ languages
 - **KaTeX**: Fast math typesetting
+- **Organized Structure**:
+  - `static/index.html`: Minimal HTML structure (~110 lines)
+  - `static/css/`: Modular stylesheets (base, layout, components, chat, sidebar)
+  - `static/js/`: Organized JavaScript modules (app, config, components, utils)
 
 **Storage & Architecture:**
 - **Browser localStorage**: Client-side conversation persistence
