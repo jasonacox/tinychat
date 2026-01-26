@@ -22,6 +22,7 @@ ENV DEFAULT_MODEL=gpt-3.5-turbo
 ENV DEFAULT_TEMPERATURE=0.7
 ENV MAX_MESSAGE_LENGTH=8000
 ENV PORT=8000
+# ENV RLM_PASSCODE=  # Set this to require passcode for RLM access (highly recommended)
 
 EXPOSE 8000
 

@@ -467,6 +467,99 @@
             border-left: 3px solid #c33;
         }
 
+        /* RLM Passcode Modal */
+        .rlm-passcode-modal .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+        }
+
+        .rlm-passcode-modal .modal-content {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            z-index: 10000;
+            max-width: 450px;
+            width: 90%;
+        }
+
+        .rlm-passcode-modal h3 {
+            margin-bottom: 15px;
+            color: #dc3545;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .rlm-passcode-modal p {
+            margin-bottom: 10px;
+            color: #666;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .rlm-passcode-modal input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            margin: 15px 0;
+        }
+
+        .rlm-passcode-modal input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+        }
+
+        .rlm-passcode-modal .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .rlm-passcode-modal button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .rlm-passcode-modal button:hover {
+            opacity: 0.9;
+        }
+
+        .rlm-passcode-modal #rlmPasscodeSubmit {
+            background: #007bff;
+            color: white;
+        }
+
+        .rlm-passcode-modal #rlmPasscodeCancel {
+            background: #6c757d;
+            color: white;
+        }
+
+        .rlm-passcode-modal .modal-error {
+            color: #dc3545;
+            font-size: 13px;
+            margin-top: 10px;
+            min-height: 20px;
+        }
+
         @media (max-width: 768px) {
             .sidebar {
                 display: none;
@@ -635,6 +728,180 @@
             localStorage.setItem(RLM_THINKING_KEY, enabled.toString());
         }
 
+        // RLM Security Management
+        class RLMSecurity {
+            constructor() {
+                this.cookieName = 'tinychat_rlm_passcode';
+                this.rlmAvailable = false;
+                this.requiresPasscode = false;
+            }
+            
+            async initialize() {
+                // Check RLM status from server
+                try {
+                    const response = await fetch('/api/rlm/status');
+                    const status = await response.json();
+                    this.rlmAvailable = status.available;
+                    this.requiresPasscode = status.requires_passcode;
+                    
+                    // Hide RLM toggle if not available
+                    if (!this.rlmAvailable) {
+                        const rlmToggleGroup = document.getElementById('rlmToggle').closest('.setting-group');
+                        if (rlmToggleGroup) {
+                            rlmToggleGroup.style.display = 'none';
+                        }
+                    }
+                    
+                    return true;
+                } catch (error) {
+                    console.error('Error checking RLM status:', error);
+                    return false;
+                }
+            }
+            
+            async checkRLMAccess() {
+                // If no passcode required, allow access
+                if (!this.requiresPasscode) {
+                    return true;
+                }
+                
+                // Check if we have a stored passcode
+                const storedPasscode = this.getCookie(this.cookieName);
+                
+                if (storedPasscode) {
+                    // Validate with server
+                    const valid = await this.validatePasscode(storedPasscode);
+                    return valid;
+                }
+                
+                return false;
+            }
+            
+            async promptForPasscode() {
+                return new Promise((resolve) => {
+                    // Create modal
+                    const modal = document.createElement('div');
+                    modal.className = 'rlm-passcode-modal';
+                    modal.innerHTML = `
+                        <div class="modal-overlay"></div>
+                        <div class="modal-content">
+                            <h3>Authentication Required</h3>
+                            <p>Please enter your passcode:</p>
+                            <input type="password" id="rlmPasscodeInput" placeholder="Enter passcode" autocomplete="off">
+                            <div class="modal-buttons">
+                                <button id="rlmPasscodeSubmit">Submit</button>
+                                <button id="rlmPasscodeCancel">Cancel</button>
+                            </div>
+                            <p class="modal-error" id="rlmPasscodeError"></p>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+                    
+                    const input = document.getElementById('rlmPasscodeInput');
+                    const submitBtn = document.getElementById('rlmPasscodeSubmit');
+                    const cancelBtn = document.getElementById('rlmPasscodeCancel');
+                    const errorDiv = document.getElementById('rlmPasscodeError');
+                    
+                    input.focus();
+                    
+                    const cleanup = () => {
+                        document.body.removeChild(modal);
+                    };
+                    
+                    submitBtn.onclick = async () => {
+                        const passcode = input.value.trim();
+                        if (!passcode) {
+                            errorDiv.textContent = 'Please enter a passcode';
+                            return;
+                        }
+                        
+                        submitBtn.disabled = true;
+                        submitBtn.textContent = 'Validating...';
+                        
+                        const valid = await this.validatePasscode(passcode);
+                        
+                        if (valid) {
+                            // Store in cookie (365 days expiration)
+                            this.setCookie(this.cookieName, passcode, 365);
+                            cleanup();
+                            resolve(true);
+                        } else {
+                            errorDiv.textContent = 'Invalid passcode. Please try again.';
+                            input.value = '';
+                            input.focus();
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = 'Submit';
+                        }
+                    };
+                    
+                    cancelBtn.onclick = () => {
+                        cleanup();
+                        resolve(false);
+                    };
+                    
+                    // Allow Enter key to submit
+                    input.addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter') {
+                            submitBtn.click();
+                        }
+                    });
+                    
+                    // Allow Escape key to cancel
+                    modal.addEventListener('keydown', (e) => {
+                        if (e.key === 'Escape') {
+                            cancelBtn.click();
+                        }
+                    });
+                });
+            }
+            
+            async validatePasscode(passcode) {
+                try {
+                    const response = await fetch('/api/rlm/validate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ passcode })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.error) {
+                        console.error('RLM validation error:', result.error);
+                        return false;
+                    }
+                    
+                    return result.valid === true;
+                } catch (error) {
+                    console.error('Error validating RLM passcode:', error);
+                    return false;
+                }
+            }
+            
+            setCookie(name, value, days) {
+                const expires = new Date();
+                expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+                document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/;SameSite=Strict`;
+            }
+            
+            getCookie(name) {
+                const nameEQ = name + "=";
+                const ca = document.cookie.split(';');
+                for (let i = 0; i < ca.length; i++) {
+                    let c = ca[i];
+                    while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+                    if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+                }
+                return null;
+            }
+            
+            clearAccess() {
+                this.setCookie(this.cookieName, '', -1);
+            }
+        }
+
+        // Initialize RLM security manager
+        const rlmSecurity = new RLMSecurity();
+
         // Render math equations in an element using KaTeX
         function renderMath(element) {
             if (typeof renderMathInElement !== 'undefined') {
@@ -800,6 +1067,9 @@
             // Configure markdown library
             configureMarked();
             
+            // Initialize RLM security
+            await rlmSecurity.initialize();
+            
             // Track session for analytics
             try {
                 const sessionResponse = await fetch('/api/session' + (sessionId ? `?session_id=${sessionId}` : ''));
@@ -903,22 +1173,55 @@
                 saveModelPreference(this.value);
             });
 
-            // RLM toggle listener - show/hide thinking toggle and persist preference
+            // RLM toggle listener - with passcode protection
             const rlmToggle = document.getElementById('rlmToggle');
             const rlmThinkingToggle = document.getElementById('rlmThinkingToggle');
             const rlmThinkingGroup = document.getElementById('rlmThinkingGroup');
             
-            // Load saved preferences
-            rlmToggle.checked = getRlmEnabled();
+            // Load saved preferences (but don't auto-enable RLM)
+            const savedRlmEnabled = getRlmEnabled();
             rlmThinkingToggle.checked = getRlmThinkingEnabled();
+            
+            // If RLM was previously enabled and we have valid access, restore it
+            if (savedRlmEnabled && rlmSecurity.rlmAvailable) {
+                // Check access asynchronously without blocking page load
+                rlmSecurity.checkRLMAccess().then(hasAccess => {
+                    if (hasAccess) {
+                        rlmToggle.checked = true;
+                    }
+                });
+            }
             
             function updateRlmThinkingVisibility() {
                 rlmThinkingGroup.style.display = rlmToggle.checked ? 'flex' : 'none';
             }
             
-            rlmToggle.addEventListener('change', function() {
-                setRlmEnabled(this.checked);
-                updateRlmThinkingVisibility();
+            rlmToggle.addEventListener('change', async function() {
+                if (this.checked) {
+                    // User wants to enable RLM - check access
+                    const hasAccess = await rlmSecurity.checkRLMAccess();
+                    
+                    if (!hasAccess) {
+                        // Prompt for passcode
+                        const granted = await rlmSecurity.promptForPasscode();
+                        
+                        if (!granted) {
+                            // User cancelled or invalid passcode - uncheck toggle
+                            this.checked = false;
+                            setRlmEnabled(false);
+                            updateRlmThinkingVisibility();
+                            return;
+                        }
+                    }
+                    
+                    // Access granted - enable RLM
+                    setRlmEnabled(true);
+                    updateRlmThinkingVisibility();
+                } else {
+                    // User is disabling RLM
+                    setRlmEnabled(false);
+                    updateRlmThinkingVisibility();
+                }
             });
             
             rlmThinkingToggle.addEventListener('change', function() {
@@ -1163,6 +1466,7 @@
                         model,
                         session_id: sessionId,
                         rlm: rlm,
+                        rlm_passcode: rlm ? rlmSecurity.getCookie(rlmSecurity.cookieName) : null,  // SECURITY: Send passcode for backend validation
                         show_rlm_thinking: show_rlm_thinking
                     })
                 });

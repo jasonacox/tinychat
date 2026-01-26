@@ -106,6 +106,7 @@ _generations_lock = asyncio.Lock()
 # RLM-specific configuration
 RLM_TIMEOUT = int(os.getenv("RLM_TIMEOUT", "60"))  # seconds
 MAX_CONCURRENT_RLM = int(os.getenv("MAX_CONCURRENT_RLM", "3"))  # max parallel RLM executions
+RLM_PASSCODE = os.getenv("RLM_PASSCODE", "")  # Passcode required to enable RLM features
 _active_rlm_generations = 0
 _rlm_lock = asyncio.Lock()
 
@@ -136,6 +137,10 @@ logger.info(f"  Security: Max message length {MAX_MESSAGE_LENGTH}")
 logger.info(f"  Security: Max conversation history {MAX_CONVERSATION_HISTORY}")
 if HAS_RLM:
     logger.info(f"  RLM: Enabled (timeout={RLM_TIMEOUT}s, max_concurrent={MAX_CONCURRENT_RLM})")
+    if RLM_PASSCODE:
+        logger.info(f"  RLM Security: Passcode protection enabled ✓")
+    else:
+        logger.warning(f"  ⚠️  RLM Security: No passcode set - RLM accessible to all users!")
     logger.warning(f"  ⚠️  RLM Security: Code execution enabled - use only with trusted users!")
 else:
     logger.info(f"  RLM: Not available (rlm package not installed)")
@@ -483,6 +488,15 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(status_code=422, content={"error": "ValidationError", "detail": simplified})
 
 # Pydantic models with validation
+class RLMPasscodeRequest(BaseModel):
+    """
+    Request payload for RLM passcode validation.
+    
+    Attributes:
+        passcode: The passcode to validate
+    """
+    passcode: str = Field(..., min_length=1, max_length=100)
+
 class ChatRequest(BaseModel):
     """
     Request payload for chat streaming endpoint.
@@ -495,12 +509,16 @@ class ChatRequest(BaseModel):
         temperature: Sampling temperature (0.0-2.0), controls randomness
         model: LLM model to use, must be in AVAILABLE_MODELS
         session_id: Optional session ID for tracking active users
+        rlm: Whether to use RLM (requires passcode if RLM_PASSCODE is set)
+        rlm_passcode: Passcode for RLM access (required if RLM_PASSCODE is configured)
+        show_rlm_thinking: Whether to stream RLM thinking process
     """
     messages: List[Dict[str, str]] = Field(..., min_length=1, max_length=MAX_CONVERSATION_HISTORY)
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
     model: Optional[str] = None
     session_id: Optional[str] = None
     rlm: Optional[bool] = False
+    rlm_passcode: Optional[str] = None
     show_rlm_thinking: Optional[bool] = True
     
     @field_validator('model')
@@ -801,6 +819,23 @@ async def chat_stream(request: ChatRequest, http_request: Request):
             async def rlm_missing_gen():
                 yield f"data: {json.dumps({'error': 'RLM module not installed. Please rebuild the container with RLM support.'})}\n\n"
             return StreamingResponse(rlm_missing_gen(), media_type="text/event-stream")
+        
+        # SECURITY: Validate RLM passcode on backend to prevent API bypass attacks
+        if RLM_PASSCODE:
+            if not request.rlm_passcode:
+                logger.warning(f"🚫 RLM request without passcode from {client_ip}")
+                async def rlm_auth_error_gen():
+                    yield f"data: {json.dumps({'error': 'RLM access requires authentication. Please enable RLM through the web interface.'})}\n\n"
+                return StreamingResponse(rlm_auth_error_gen(), media_type="text/event-stream")
+            
+            if request.rlm_passcode != RLM_PASSCODE:
+                logger.warning(f"🚫 RLM request with INVALID passcode from {client_ip}")
+                async def rlm_invalid_passcode_gen():
+                    yield f"data: {json.dumps({'error': 'Invalid RLM passcode. Access denied.'})}\n\n"
+                return StreamingResponse(rlm_invalid_passcode_gen(), media_type="text/event-stream")
+            
+            # Passcode valid - log and proceed
+            logger.info(f"✓ RLM passcode validated for {client_ip}")
 
         async def rlm_generate():
             global _active_generations, _active_rlm_generations
@@ -1176,6 +1211,57 @@ async def get_version():
         dict: Version information
     """
     return {"version": __version__}
+
+@app.post("/api/rlm/validate")
+async def validate_rlm_passcode(request: RLMPasscodeRequest, http_request: Request):
+    """
+    Validate RLM passcode for access control.
+    
+    This is a simple security measure to prevent unauthorized RLM usage.
+    Adds friction for casual misuse without requiring full authentication.
+    
+    Args:
+        request: Passcode request payload
+        http_request: FastAPI request object for logging
+    
+    Returns:
+        dict: Validation result with 'valid' boolean or 'error' message
+    """
+    client_ip = get_client_ip(http_request)
+    
+    if not RLM_PASSCODE:
+        logger.warning(f"RLM passcode validation attempted but RLM_PASSCODE not configured (from {client_ip})")
+        return {"error": "RLM passcode not configured on server"}
+    
+    if not HAS_RLM:
+        logger.warning(f"RLM passcode validation attempted but RLM not available (from {client_ip})")
+        return {"error": "RLM not available on server"}
+    
+    if request.passcode == RLM_PASSCODE:
+        logger.info(f"✓ RLM passcode validated successfully from {client_ip}")
+        return {"valid": True}
+    else:
+        # Log failed attempt for security monitoring
+        logger.warning(f"✗ Failed RLM passcode attempt from {client_ip}")
+        return {"valid": False}
+
+@app.get("/api/rlm/status")
+async def get_rlm_status():
+    """
+    Check if RLM is available and whether it requires a passcode.
+    
+    This endpoint is called by the frontend on startup to determine
+    whether to show the RLM toggle and whether to prompt for a passcode.
+    
+    Returns:
+        dict: RLM status with:
+            - available: Whether RLM package is installed
+            - requires_passcode: Whether RLM_PASSCODE is configured
+    """
+    return {
+        "available": HAS_RLM,
+        "requires_passcode": bool(RLM_PASSCODE)
+    }
 
 @app.get("/api/session")
 async def create_session(session_id: Optional[str] = None):
