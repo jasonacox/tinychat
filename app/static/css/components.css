@@ -272,3 +272,30 @@
     font-weight: 500;
     pointer-events: none;
 }
+
+/* Storage Meter */
+.storage-meter {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.storage-meter-bar {
+    height: 8px;
+    background: #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.storage-meter-fill {
+    height: 100%;
+    background: #10b981;
+    transition: width 0.3s ease, background-color 0.3s ease;
+    border-radius: 4px;
+}
+
+.storage-meter-text {
+    font-size: 11px;
+    color: #666;
+    text-align: center;
+}

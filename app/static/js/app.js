@@ -1,6 +1,6 @@
 // Main app initialization and event listeners
 
-function setupEventListeners() {
+async function setupEventListeners() {
     const messageInput = document.getElementById('messageInput');
     const temperatureSlider = document.getElementById('temperature');
     const temperatureValue = document.getElementById('temperature-value');
@@ -26,19 +26,19 @@ function setupEventListeners() {
 
     // Markdown toggle listener
     const markdownToggle = document.getElementById('markdownToggle');
-    markdownToggle.checked = getMarkdownEnabled();
-    markdownToggle.addEventListener('change', function() {
-        setMarkdownEnabled(this.checked);
+    markdownToggle.checked = await getMarkdownEnabled();
+    markdownToggle.addEventListener('change', async function() {
+        await setMarkdownEnabled(this.checked);
         // Reload current conversation to re-render messages
         if (currentConversationId) {
-            loadConversation(currentConversationId);
+            await loadConversation(currentConversationId);
         }
     });
 
     // Model selection listener
     const modelSelect = document.getElementById('model');
-    modelSelect.addEventListener('change', function() {
-        saveModelPreference(this.value);
+    modelSelect.addEventListener('change', async function() {
+        await saveModelPreference(this.value);
     });
 
     // RLM toggle listener - with passcode protection
@@ -47,8 +47,8 @@ function setupEventListeners() {
     const rlmThinkingGroup = document.getElementById('rlmThinkingGroup');
     
     // Load saved preferences (but don't auto-enable RLM)
-    const savedRlmEnabled = getRlmEnabled();
-    rlmThinkingToggle.checked = getRlmThinkingEnabled();
+    const savedRlmEnabled = await getRlmEnabled();
+    rlmThinkingToggle.checked = await getRlmThinkingEnabled();
     
     // If RLM was previously enabled and we have valid access, restore it
     if (savedRlmEnabled && rlmSecurity.rlmAvailable) {
@@ -76,31 +76,60 @@ function setupEventListeners() {
                 if (!granted) {
                     // User cancelled or invalid passcode - uncheck toggle
                     this.checked = false;
-                    setRlmEnabled(false);
+                    await setRlmEnabled(false);
                     updateRlmThinkingVisibility();
                     return;
                 }
             }
             
             // Access granted - enable RLM
-            setRlmEnabled(true);
+            await setRlmEnabled(true);
             updateRlmThinkingVisibility();
         } else {
             // User is disabling RLM
-            setRlmEnabled(false);
+            await setRlmEnabled(false);
             updateRlmThinkingVisibility();
         }
     });
     
-    rlmThinkingToggle.addEventListener('change', function() {
-        setRlmThinkingEnabled(this.checked);
+    rlmThinkingToggle.addEventListener('change', async function() {
+        await setRlmThinkingEnabled(this.checked);
     });
     
     updateRlmThinkingVisibility(); // Set initial state
 }
 
+// Update storage meter display
+async function updateStorageMeter() {
+    const stats = await storageAdapter.getStorageStats();
+    const meterFill = document.getElementById('storageMeterFill');
+    const meterText = document.getElementById('storageMeterText');
+    
+    if (meterFill && meterText) {
+        const percentage = stats.percentUsed;
+        meterFill.style.width = `${percentage}%`;
+        
+        // Color based on usage
+        if (percentage > 90) {
+            meterFill.style.backgroundColor = '#ef4444'; // Red
+        } else if (percentage > 70) {
+            meterFill.style.backgroundColor = '#f59e0b'; // Orange
+        } else {
+            meterFill.style.backgroundColor = '#10b981'; // Green
+        }
+        
+        meterText.textContent = `${stats.usedMB.toFixed(1)} MB / ${stats.totalMB.toFixed(0)} MB (${percentage.toFixed(1)}%)`;
+    }
+}
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', async function() {
+    // STEP 1: Run migration from localStorage to IndexedDB
+    await storageAdapter.migrateFromLocalStorage();
+    
+    // STEP 2: Initialize session ID (now async)
+    await initSessionId();
+    
     // Configure markdown library
     configureMarked();
     
@@ -115,11 +144,14 @@ document.addEventListener('DOMContentLoaded', async function() {
         const sessionResponse = await fetch('/api/session' + (sessionId ? `?session_id=${sessionId}` : ''));
         const sessionData = await sessionResponse.json();
         sessionId = sessionData.session_id;
-        localStorage.setItem(SESSION_ID_KEY, sessionId);
+        await storageAdapter.setItem(SESSION_ID_KEY, sessionId);
     } catch (err) {
         console.log('Session tracking failed:', err);
     }
     
-    loadConfiguration();
-    setupEventListeners();
+    // Initialize storage meter
+    updateStorageMeter();
+    
+    await loadConfiguration();
+    await setupEventListeners();
 });

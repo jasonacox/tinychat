@@ -23,6 +23,9 @@
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     
+    <!-- IndexedDB library for enhanced storage -->
+    <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
+    
     <!-- Application Styles -->
     <link rel="stylesheet" href="/static/css/base.css">
     <link rel="stylesheet" href="/static/css/layout.css">
@@ -38,6 +41,19 @@
         </div>
         <div class="conversations" id="conversations">
             <!-- Conversations will be loaded here -->
+        </div>
+        <div class="sidebar-footer">
+            <div class="storage-meter">
+                <div class="storage-meter-bar">
+                    <div class="storage-meter-fill" id="storageMeterFill"></div>
+                </div>
+                <div class="storage-meter-text" id="storageMeterText">Loading...</div>
+            </div>
+            <div class="sidebar-footer-buttons">
+                <button class="export-btn" onclick="exportConversations()">📤 Export</button>
+                <button class="import-btn" onclick="document.getElementById('importInput').click()">📥 Import</button>
+            </div>
+            <input type="file" id="importInput" accept=".json" style="display: none;" onchange="importConversations(event)">
         </div>
     </div>
 
@@ -122,6 +138,7 @@
     </div>
 
     <!-- Application Scripts - Order matters! -->
+    <script src="/static/js/utils/storage-adapter.js"></script>
     <script src="/static/js/config.js"></script>
     <script src="/static/js/utils/storage.js"></script>
     <script src="/static/js/utils/markdown.js"></script>

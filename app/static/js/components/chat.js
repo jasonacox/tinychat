@@ -24,11 +24,11 @@ async function sendMessage() {
             created: new Date().toISOString(),
             last_updated: new Date().toISOString()
         };
-        saveConversation(currentConversationId, conversation);
+        await saveConversation(currentConversationId, conversation);
     }
     
     // Get current conversation
-    const conversation = getConversation(currentConversationId);
+    const conversation = await getConversation(currentConversationId);
     
     // Update title with first message if still using default
     const displayMessage = message || '(image)';
@@ -53,7 +53,7 @@ async function sendMessage() {
     // Add user message to local storage
     conversation.messages.push(userMessage);
     conversation.last_updated = new Date().toISOString();
-    saveConversation(currentConversationId, conversation);
+    await saveConversation(currentConversationId, conversation);
     
     // Clear input and add user message to UI
     input.value = '';
@@ -120,7 +120,8 @@ async function sendMessage() {
         isStreaming = false;
         document.getElementById('sendBtn').disabled = false;
         document.getElementById('typing').style.display = 'none';
-        loadConversations();  // Refresh sidebar
+        await loadConversations();  // Refresh sidebar
+        await updateStorageMeter();  // Update storage meter after saving
     }
 }
 
@@ -166,7 +167,7 @@ async function handleStreamResponse(response, conversation) {
                                 
                                 // If remove_images flag is set, remove all images from conversation
                                 if (parsed.remove_images) {
-                                    const conversation = getConversation(currentConversationId);
+                                    const conversation = await getConversation(currentConversationId);
                                     if (conversation && conversation.messages) {
                                         conversation.messages.forEach(msg => {
                                             if (msg.image) {
@@ -174,7 +175,7 @@ async function handleStreamResponse(response, conversation) {
                                                 delete msg.image_type;
                                             }
                                         });
-                                        saveConversation(currentConversationId, conversation);
+                                        await saveConversation(currentConversationId, conversation);
                                         console.log('Removed images from conversation after vision error');
                                     }
                                 }
@@ -295,7 +296,7 @@ async function handleStreamResponse(response, conversation) {
             
             conversation.messages.push(assistantMessage);
             conversation.last_updated = new Date().toISOString();
-            saveConversation(currentConversationId, conversation);
+            await saveConversation(currentConversationId, conversation);
         }
     }
 }
@@ -328,7 +329,13 @@ function addMessageToUI(role, content, timestamp, useMarkdown = false, imageData
     // Add image if present
     if (imageData) {
         const img = document.createElement('img');
-        img.src = `data:${imageData.type};base64,${imageData.data}`;
+        // Check if this is already a complete data URL (generated images)
+        if (imageData.isComplete) {
+            img.src = imageData.data;
+        } else {
+            // User uploaded image - needs data: prefix
+            img.src = `data:${imageData.type};base64,${imageData.data}`;
+        }
         img.className = 'message-image';
         img.alt = 'Uploaded image';
         img.title = 'Click to view full size';
