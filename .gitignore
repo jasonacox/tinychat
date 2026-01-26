@@ -214,3 +214,5 @@ conversations.json
 mylocal.sh
 docker-run.sh
 example.py
+PLAN.md
+app/main_old.py

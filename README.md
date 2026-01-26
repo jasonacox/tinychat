@@ -232,17 +232,50 @@ Or edit `docker-run.sh` to set your defaults.
 ```
 tinychat/
 ├── app/
-│   ├── main.py              # FastAPI application
+│   ├── main.py                    # FastAPI app initialization (69 lines)
+│   ├── config.py                  # Centralized configuration
+│   ├── dependencies.py            # Dependency injection
+│   ├── __init__.py
+│   ├── api/
+│   │   ├── schemas/              # Pydantic request/response models
+│   │   │   ├── __init__.py
+│   │   │   └── chat.py           # Chat and RLM models
+│   │   └── v1/                   # API version 1 endpoints
+│   │       ├── __init__.py
+│   │       ├── root.py           # Root/UI endpoint
+│   │       ├── chat.py           # Chat streaming endpoint
+│   │       └── config.py         # Config/health/RLM endpoints
+│   ├── services/                 # Business logic layer
+│   │   ├── __init__.py
+│   │   ├── llm_service.py        # OpenAI API integration
+│   │   ├── rlm_service.py        # RLM code execution
+│   │   ├── image_service.py      # Image generation (SwarmUI/OpenAI)
+│   │   └── logging_service.py    # Conversation logging
+│   ├── middleware/               # HTTP middleware
+│   │   ├── __init__.py
+│   │   └── security.py           # Security headers, CORS
+│   ├── utils/                    # Utility functions
+│   │   ├── __init__.py
+│   │   ├── security.py           # IP extraction helpers
+│   │   ├── error_handlers.py     # Error formatting
+│   │   └── state.py              # Session/generation tracking
 │   └── static/
-│       ├── index.html       # Frontend UI
-│       └── favicon*.svg     # Icons
-├── Dockerfile               # Multi-stage build
-├── requirements.txt         # Python dependencies
-├── docker-run.sh           # Docker deployment script
-├── local.sh                # Local development script
-├── upload.sh               # Docker Hub publishing script
-└── README.md               # This file
+│       ├── index.html            # Single-page frontend UI
+│       └── favicon*.svg          # Icons
+├── Dockerfile                    # Multi-stage build
+├── requirements.txt              # Python dependencies
+├── docker-run.sh                # Docker deployment script
+├── local.sh                     # Local development script
+├── upload.sh                    # Docker Hub publishing script
+└── README.md                    # This file
 ```
+
+**Architecture Highlights:**
+- **Modular Design**: Clean separation of concerns (API, services, middleware, utils)
+- **Minimal main.py**: 69 lines (was 1337) - just app initialization and routing
+- **Service Layer**: Business logic isolated for easy testing and maintenance
+- **API Versioning**: v1 endpoints ready for future API evolution
+- **Easy to Extend**: Adding features (like document processing) is straightforward
 
 ### Technology Stack
 
