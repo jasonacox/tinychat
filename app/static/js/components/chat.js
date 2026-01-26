@@ -7,7 +7,8 @@ async function sendMessage() {
     const input = document.getElementById('messageInput');
     const message = input.value.trim();
     
-    if (!message || isStreaming) return;
+    // Allow sending if we have a message OR an attached image
+    if ((!message && !hasAttachedImage()) || isStreaming) return;
     
     const temperature = parseFloat(document.getElementById('temperature').value);
     const model = document.getElementById('model').value;
@@ -30,16 +31,26 @@ async function sendMessage() {
     const conversation = getConversation(currentConversationId);
     
     // Update title with first message if still using default
+    const displayMessage = message || '(image)';
     if (conversation.title === 'New Conversation' && conversation.messages.length === 0) {
-        conversation.title = message.substring(0, 50) + (message.length > 50 ? '...' : '');
+        conversation.title = displayMessage.substring(0, 50) + (displayMessage.length > 50 ? '...' : '');
+    }
+    
+    // Build user message
+    const userMessage = {
+        role: 'user',
+        content: message || '(image)',
+        timestamp: new Date().toISOString()
+    };
+    
+    // Add image data if attached
+    const imageData = getAttachedImage();
+    if (imageData) {
+        userMessage.image = imageData.data;
+        userMessage.image_type = imageData.type;
     }
     
     // Add user message to local storage
-    const userMessage = {
-        role: 'user',
-        content: message,
-        timestamp: new Date().toISOString()
-    };
     conversation.messages.push(userMessage);
     conversation.last_updated = new Date().toISOString();
     saveConversation(currentConversationId, conversation);
@@ -47,22 +58,27 @@ async function sendMessage() {
     // Clear input and add user message to UI
     input.value = '';
     input.style.height = 'auto';
-    addMessageToUI('user', message);
+    addMessageToUI('user', message || '(image)', new Date().toISOString(), false, imageData);
+    
+    // Clear attached image
+    removeAttachedImage();
     
     isStreaming = true;
     document.getElementById('sendBtn').disabled = true;
     document.getElementById('typing').style.display = 'block';
     
     try {
-        // Send conversation history to API
-        // Filter out image data to avoid sending huge base64 strings
+        // Send conversation history to API (includes image data)
         const apiMessages = conversation.messages.map(m => {
             const msg = {
                 role: m.role,
                 content: m.content
             };
-            // Don't include image_data in API requests
-            // The text content ("Here is your image.") is kept
+            // Include image data if present
+            if (m.image) {
+                msg.image = m.image;
+                msg.image_type = m.image_type;
+            }
             return msg;
         });
         
@@ -70,7 +86,7 @@ async function sendMessage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                messages: apiMessages,  // Send full conversation history
+                messages: apiMessages,  // Send full conversation history with images
                 temperature,
                 model,
                 session_id: sessionId,
@@ -142,6 +158,30 @@ async function handleStreamResponse(response, conversation) {
                         
                         if (parsed.error) {
                             errorOccurred = true;
+                            
+                            // Check for vision-not-supported error
+                            if (parsed.error === 'vision_not_supported' && parsed.message) {
+                                // Show friendly vision error message
+                                showError('⚠️ ' + parsed.message);
+                                
+                                // If remove_images flag is set, remove all images from conversation
+                                if (parsed.remove_images) {
+                                    const conversation = getConversation(currentConversationId);
+                                    if (conversation && conversation.messages) {
+                                        conversation.messages.forEach(msg => {
+                                            if (msg.image) {
+                                                delete msg.image;
+                                                delete msg.image_type;
+                                            }
+                                        });
+                                        saveConversation(currentConversationId, conversation);
+                                        console.log('Removed images from conversation after vision error');
+                                    }
+                                }
+                                
+                                return; // Exit early - don't save error message
+                            }
+                            
                             // Clean up the error message for display
                             let errorMsg = parsed.error;
                             
@@ -260,7 +300,7 @@ async function handleStreamResponse(response, conversation) {
     }
 }
 
-function addMessageToUI(role, content, timestamp, useMarkdown = false) {
+function addMessageToUI(role, content, timestamp, useMarkdown = false, imageData = null) {
     const container = document.getElementById('messages');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
@@ -285,29 +325,58 @@ function addMessageToUI(role, content, timestamp, useMarkdown = false) {
     const messageContent = document.createElement('div');
     messageContent.className = 'message-content';
     
-    // Apply markdown rendering if enabled and requested
-    const markdownEnabled = getMarkdownEnabled();
+    // Add image if present
+    if (imageData) {
+        const img = document.createElement('img');
+        img.src = `data:${imageData.type};base64,${imageData.data}`;
+        img.className = 'message-image';
+        img.alt = 'Uploaded image';
+        img.title = 'Click to view full size';
+        
+        // Click to view full size
+        img.onclick = () => {
+            showImageModal(img.src);
+        };
+        
+        messageContent.appendChild(img);
+    }
     
-    if (useMarkdown && markdownEnabled && role === 'assistant' && typeof marked !== 'undefined') {
-        try {
-            // Render markdown with math protection
-            const html = renderMarkdownWithMath(content);
-            messageContent.innerHTML = html;
-            messageContent.classList.add('markdown');
-            // Apply syntax highlighting to code blocks
-            if (typeof hljs !== 'undefined') {
-                messageContent.querySelectorAll('pre code').forEach(block => {
-                    hljs.highlightElement(block);
-                });
+    // Add text content if present
+    if (content) {
+        // Apply markdown rendering if enabled and requested
+        const markdownEnabled = getMarkdownEnabled();
+        
+        if (useMarkdown && markdownEnabled && role === 'assistant' && typeof marked !== 'undefined') {
+            try {
+                // Render markdown with math protection
+                const html = renderMarkdownWithMath(content);
+                const textDiv = document.createElement('div');
+                textDiv.innerHTML = html;
+                textDiv.classList.add('markdown');
+                messageContent.appendChild(textDiv);
+                
+                // Apply syntax highlighting to code blocks
+                if (typeof hljs !== 'undefined') {
+                    textDiv.querySelectorAll('pre code').forEach(block => {
+                        hljs.highlightElement(block);
+                    });
+                }
+                // Render math equations
+                renderMath(textDiv);
+            } catch (e) {
+                console.error('Markdown parsing error:', e);
+                const textNode = document.createTextNode(content);
+                messageContent.appendChild(textNode);
             }
-            // Render math equations
-            renderMath(messageContent);
-        } catch (e) {
-            console.error('Markdown parsing error:', e);
-            messageContent.textContent = content;  // Fallback to plain text
+        } else {
+            const textNode = document.createTextNode(content);
+            messageContent.appendChild(textNode);
         }
-    } else {
-        messageContent.textContent = content;  // Use textContent to prevent XSS
+        
+        // Add markdown class if applicable
+        if (useMarkdown && markdownEnabled && role === 'assistant') {
+            messageContent.classList.add('markdown');
+        }
     }
     
     messageDiv.appendChild(messageHeader);
@@ -336,4 +405,41 @@ function showError(message) {
 function scrollToBottom() {
     const container = document.getElementById('messages');
     container.scrollTop = container.scrollHeight;
+}
+
+/**
+ * Show full-size image in a modal overlay.
+ */
+function showImageModal(imageSrc) {
+    // Create modal overlay
+    const modal = document.createElement('div');
+    modal.className = 'image-modal';
+    modal.innerHTML = `
+        <div class="image-modal-overlay"></div>
+        <div class="image-modal-content">
+            <button class="image-modal-close" title="Close (Esc)">×</button>
+            <img src="${imageSrc}" alt="Full size image">
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Close handlers
+    const closeModal = () => {
+        document.body.removeChild(modal);
+        document.removeEventListener('keydown', handleEscape);
+    };
+    
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+        }
+    };
+    
+    // Click overlay or close button to close
+    modal.querySelector('.image-modal-overlay').onclick = closeModal;
+    modal.querySelector('.image-modal-close').onclick = closeModal;
+    
+    // ESC key to close
+    document.addEventListener('keydown', handleEscape);
 }

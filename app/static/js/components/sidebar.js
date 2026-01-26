@@ -85,14 +85,19 @@ async function loadConversation(conversationId) {
     container.innerHTML = '';
     
     conversation.messages.forEach(message => {
-        const messageDiv = addMessageToUI(message.role, message.content, message.timestamp, message.role === 'assistant');
+        // Prepare image data if present
+        const imageData = (message.image && message.image_type) ? {
+            data: message.image,
+            type: message.image_type
+        } : null;
         
-        // If this message has a stored image, render it
-        if (message.has_image && message.image_data) {
-            const messageContent = messageDiv.querySelector('.message-content');
-            const imageContainer = createImageContainer(message.image_data);
-            messageContent.appendChild(imageContainer);
-        }
+        addMessageToUI(
+            message.role, 
+            message.content, 
+            message.timestamp, 
+            message.role === 'assistant',
+            imageData
+        );
     });
     
     scrollToBottom();

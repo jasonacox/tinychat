@@ -18,7 +18,89 @@ function getConversation(conversationId) {
 function saveConversation(conversationId, conversation) {
     const conversations = getConversations();
     conversations[conversationId] = conversation;
-    saveConversations(conversations);
+    
+    // Try to save
+    try {
+        saveConversations(conversations);
+    } catch (e) {
+        if (e.name === 'QuotaExceededError') {
+            console.warn('localStorage quota exceeded. Attempting cleanup...');
+            
+            // Cleanup old images
+            if (cleanupOldImages(conversations)) {
+                // Try again after cleanup
+                try {
+                    saveConversations(conversations);
+                } catch (e2) {
+                    showError('Storage full. Please delete some old conversations.');
+                    throw e2;
+                }
+            } else {
+                showError('Storage full. Please delete some conversations.');
+                throw e;
+            }
+        } else {
+            throw e;
+        }
+    }
+}
+
+/**
+ * Clean up old images from conversations to free storage space.
+ * Keeps images only in the most recent 5 conversations.
+ */
+function cleanupOldImages(conversations) {
+    let cleaned = false;
+    
+    // Get conversations sorted by last_updated (newest first)
+    const sorted = Object.entries(conversations).sort((a, b) => {
+        const dateA = new Date(a[1].last_updated || a[1].created || 0);
+        const dateB = new Date(b[1].last_updated || b[1].created || 0);
+        return dateB - dateA;
+    });
+    
+    // Keep images in top 5 conversations, remove from others
+    sorted.forEach(([id, conv], index) => {
+        if (index >= 5 && conv.messages) {
+            conv.messages.forEach(msg => {
+                if (msg.image) {
+                    delete msg.image;
+                    delete msg.image_type;
+                    cleaned = true;
+                }
+            });
+        }
+    });
+    
+    if (cleaned) {
+        console.log('Cleaned up images from old conversations');
+    }
+    
+    return cleaned;
+}
+
+/**
+ * Get estimated localStorage usage.
+ */
+function getStorageUsage() {
+    let total = 0;
+    for (let key in localStorage) {
+        if (localStorage.hasOwnProperty(key)) {
+            total += localStorage[key].length + key.length;
+        }
+    }
+    // Convert to MB
+    return (total / 1024 / 1024).toFixed(2);
+}
+
+/**
+ * Get size of conversations in localStorage.
+ */
+function getConversationsSize() {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return 0;
+    // Size in MB
+    return (stored.length / 1024 / 1024).toFixed(2);
 }
 
 function deleteConversation(conversationId) {

@@ -1,6 +1,7 @@
 """Pydantic models for chat endpoints."""
 
 import logging
+import re
 from typing import Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator
 
@@ -63,7 +64,7 @@ class ChatRequest(BaseModel):
         Validate message structure and content.
         
         Checks that each message has required fields, valid role,
-        and content within length limits.
+        and content within length limits. Also validates optional image fields.
         """
         for msg in v:
             if 'role' not in msg or 'content' not in msg:
@@ -72,4 +73,30 @@ class ChatRequest(BaseModel):
                 raise ValueError("Role must be 'user', 'assistant', or 'system'")
             if len(msg['content']) > Settings.MAX_MESSAGE_LENGTH:
                 raise ValueError(f"Message content too long (max {Settings.MAX_MESSAGE_LENGTH})")
+            
+            # Validate optional image fields
+            if 'image' in msg:
+                # Validate image is base64 string (basic check)
+                image_data = msg['image']
+                if not isinstance(image_data, str) or len(image_data) == 0:
+                    raise ValueError("Image data must be a non-empty string")
+                
+                # Check for valid base64 characters (basic validation)
+                if not re.match(r'^[A-Za-z0-9+/]*={0,2}$', image_data):
+                    raise ValueError("Image data must be valid base64")
+                
+                # Validate image_type if image is present
+                if 'image_type' not in msg:
+                    raise ValueError("image_type is required when image is provided")
+                
+                valid_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+                if msg['image_type'] not in valid_types:
+                    raise ValueError(f"image_type must be one of: {', '.join(valid_types)}")
+                
+                # Estimate size (base64 is ~1.33x original size)
+                estimated_size = (len(image_data) * 3) / 4
+                max_size = 10 * 1024 * 1024  # 10MB
+                if estimated_size > max_size:
+                    raise ValueError(f"Image too large (max 10MB)")
+        
         return v

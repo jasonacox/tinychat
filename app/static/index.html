@@ -88,13 +88,31 @@
 
         <div class="chat-input-area">
             <div class="input-container">
-                <textarea 
-                    class="message-input" 
-                    id="messageInput" 
-                    placeholder="Type your message here..."
-                    rows="1"
-                ></textarea>
-                <button class="send-btn" id="sendBtn" onclick="sendMessage()">Send</button>
+                <!-- Image preview area -->
+                <div id="imagePreview" class="image-preview" style="display: none;">
+                    <img id="previewImg" src="" alt="Preview">
+                    <div class="image-info">
+                        <span id="imageFileName"></span>
+                        <button class="remove-image" onclick="removeAttachedImage()" title="Remove image">×</button>
+                    </div>
+                </div>
+                
+                <!-- Hidden file input -->
+                <input type="file" id="imageInput" accept="image/jpeg,image/png,image/gif,image/webp" style="display: none;">
+                
+                <!-- Input row with attach button -->
+                <div class="input-row">
+                    <button class="attach-btn" onclick="document.getElementById('imageInput').click()" title="Attach image">
+                        📎
+                    </button>
+                    <textarea 
+                        class="message-input" 
+                        id="messageInput" 
+                        placeholder="Type your message here..."
+                        rows="1"
+                    ></textarea>
+                    <button class="send-btn" id="sendBtn" onclick="sendMessage()">Send</button>
+                </div>
             </div>
         </div>
 
@@ -107,6 +125,7 @@
     <script src="/static/js/config.js"></script>
     <script src="/static/js/utils/storage.js"></script>
     <script src="/static/js/utils/markdown.js"></script>
+    <script src="/static/js/utils/image.js"></script>
     <script src="/static/js/components/rlm-security.js"></script>
     <script src="/static/js/components/sidebar.js"></script>
     <script src="/static/js/components/chat.js"></script>

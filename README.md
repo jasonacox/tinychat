@@ -48,7 +48,8 @@ docker run -d \
 - **🎨 Syntax Highlighting**: Code blocks automatically highlighted in 180+ languages
 - **💬 Real-time Streaming**: Server-Sent Events for token-by-token responses
 - **🖼️ Image Generation**: Create images with SwarmUI or OpenAI DALL-E
-- **💾 Client-side Storage**: Conversations persist in browser localStorage
+- **� Vision Model Support**: Upload images to vision-capable models (GPT-4o, Qwen VLM, LLaVA, etc.)
+- **�💾 Client-side Storage**: Conversations persist in browser localStorage
 - **⚙️ Smart Defaults**: Model selection and markdown preferences saved automatically
 - **🔒 Security First**: Content Security Policy, input validation, sanitization
 - **📊 Stateless**: Zero server-side memory, horizontally scalable
@@ -83,6 +84,7 @@ docker run -d \
 | `OPENAI_IMAGE_API_BASE` | `https://api.openai.com/v1` | OpenAI Images API endpoint |
 | `OPENAI_IMAGE_MODEL` | `dall-e-3` | OpenAI image model |
 | `OPENAI_IMAGE_SIZE` | `1024x1024` | OpenAI image size |
+| `MAX_IMAGE_SIZE_MB` | `10` | Maximum upload image size in MB |
 | `RLM_TIMEOUT` | `60` | RLM execution timeout (seconds) |
 | `MAX_CONCURRENT_RLM` | `3` | Maximum parallel RLM executions |
 | `RLM_PASSCODE` | *(empty)* | Passcode required to enable RLM (⚠️ **highly recommended**) |
@@ -146,6 +148,32 @@ docker run -d \
 - `/image A futuristic city at sunset`
 
 Generated images display at 25% size and can be clicked to view full size. Download button included.
+
+### Vision Model Support (Image Upload)
+
+TinyChat supports uploading images to vision-capable language models for analysis and understanding.
+
+**Supported Models**:
+- OpenAI: GPT-4o, GPT-4 Turbo, GPT-4 Vision Preview
+- Qwen: Qwen2-VL and other Qwen vision models
+- LLaVA: Via Ollama or LM Studio
+- Any OpenAI-compatible vision model
+
+<img alt="TinyChat Image" src="https://github.com/user-attachments/assets/77d5df49-a2ef-4f6d-ad2e-f1d99f387f7f" />
+
+**Usage**:
+- **Drag & Drop**: Drag an image anywhere in the conversation window
+- **Attach Button**: Click the 📎 (paperclip) icon next to the message input
+- **File Selection**: Choose a JPEG, PNG, GIF, or WebP image (max 10MB)
+
+**Features**:
+- Images are automatically compressed for optimal storage
+- Only the most recent image is sent to the model (to reduce token usage)
+- Images are stored locally in your browser (no server storage)
+- Thumbnail preview in conversation thread (click to view full size)
+- Automatic error handling for non-vision models
+
+**Note**: If you upload an image to a non-vision model, TinyChat will automatically detect the error and remove the image from the conversation, allowing you to continue chatting without it.
 
 ### Research Logging
 
@@ -232,9 +260,9 @@ Or edit `docker-run.sh` to set your defaults.
 ```
 tinychat/
 ├── app/
-│   ├── main.py                    # FastAPI app initialization (69 lines)
-│   ├── config.py                  # Centralized configuration
-│   ├── dependencies.py            # Dependency injection
+│   ├── main.py                   # FastAPI app initialization (69 lines)
+│   ├── config.py                 # Centralized configuration
+│   ├── dependencies.py           # Dependency injection
 │   ├── __init__.py
 │   ├── api/
 │   │   ├── schemas/              # Pydantic request/response models
@@ -277,13 +305,14 @@ tinychat/
 │           │   └── rlm-security.js # RLM authentication
 │           └── utils/            # Utility functions
 │               ├── storage.js    # localStorage management
-│               └── markdown.js   # Markdown & math rendering
+│               ├── markdown.js   # Markdown & math rendering
+│               └── image.js      # Image upload, compression & base64
 ├── Dockerfile                    # Multi-stage build
 ├── requirements.txt              # Python dependencies
-├── docker-run.sh                # Docker deployment script
-├── local.sh                     # Local development script
-├── upload.sh                    # Docker Hub publishing script
-└── README.md                    # This file
+├── docker-run.sh                 # Docker deployment script
+├── local.sh                      # Local development script
+├── upload.sh                     # Docker Hub publishing script
+└── README.md                     # This file
 ```
 
 **Architecture Highlights:**
