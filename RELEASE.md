@@ -1,5 +1,80 @@
 # Release Notes
 
+## v0.3.1 - Document Upload and Parsing
+
+### Major Features
+- **Multi-Format Document Upload**: Added comprehensive document parsing with support for 9 file formats
+  - Supported formats: PDF, DOCX, XLSX, PPTX, CSV, JSON, HTML, TXT, MD
+  - Drag-and-drop or attach documents (📎 button) to conversations
+  - Automatic parsing to markdown format for clean LLM consumption
+  - Document content integrated into conversation context (RLM and non-RLM modes)
+  - Configurable document limits with automatic rotation (oldest removed when limit reached)
+  - Documents persist in browser IndexedDB across page refreshes
+  - Smart document display with expand/collapse for viewing parsed content
+
+### Backend Enhancements
+- **Document Parser Service**: Format-specific parsers for each document type
+  - PDF: Text extraction with page-by-page parsing (PyPDF2)
+  - DOCX: Full paragraph and table extraction (python-docx)
+  - XLSX: Sheet-by-sheet table conversion (openpyxl)
+  - PPTX: Slide content with shape and note extraction (python-pptx)
+  - HTML: Clean text extraction and markdown conversion (beautifulsoup4, markdownify)
+  - CSV/JSON: Structured data parsing with table formatting
+  - TXT/MD: Direct content reading with encoding detection
+- **Context Integration**: Document content injected into conversation context
+  - RLM mode: Documents wrapped in context format for recursive processing
+  - Non-RLM mode: Documents prepended to conversation with clear labeling
+  - Configurable via `MAX_DOCUMENTS_IN_CONTEXT` setting (default: 1)
+- **API Endpoint**: New `/api/documents/parse` endpoint for file upload and processing
+  - File size validation (configurable via `MAX_DOCUMENT_SIZE_MB`)
+  - MIME type validation for supported formats
+  - Returns parsed markdown with metadata (pages, size, filename)
+
+### Frontend Features
+- **Unified File Upload Interface**: Extended existing image upload to support documents
+  - Automatic file type detection (image vs document)
+  - Visual feedback during upload and parsing
+  - Document preview with file icon, name, page count, and size
+  - Expand/collapse functionality to view parsed markdown content
+  - Syntax highlighting for code in documents
+  - Math equation rendering in document content
+- **IndexedDB Storage**: Client-side storage for parsed document content
+  - Persistent storage across browser sessions
+  - Efficient storage of large document text
+  - Automatic cleanup when documents are removed
+- **Enhanced UI/UX**:
+  - Compact document display with optimized spacing
+  - Blue informational notifications (changed from red to avoid confusion with errors)
+  - Document metadata display (page count, file size)
+  - Smooth expand/collapse animations
+
+### Configuration
+New document-related environment variables:
+- `MAX_DOCUMENT_SIZE_MB` - Maximum document upload size (default: 10MB)
+- `MAX_DOCUMENTS_IN_CONTEXT` - Maximum documents in conversation context (default: 1)
+- Supported MIME types automatically configured for all 9 formats
+
+### Dependencies Added
+- **PyPDF2** (>=3.0.0) - PDF parsing
+- **python-docx** (>=1.0.0) - Word document parsing
+- **openpyxl** (>=3.1.0) - Excel spreadsheet parsing
+- **python-pptx** (>=0.6.0) - PowerPoint presentation parsing
+- **beautifulsoup4** (>=4.12.0) - HTML parsing
+- **markdownify** (>=0.11.0) - HTML to markdown conversion
+
+### Bug Fixes
+- Fixed duplicate function declarations in file upload module
+- Fixed parameter shadowing issue with `document` object
+- Fixed Pydantic schema validation for nested document objects
+- Fixed HTML template whitespace in document display
+- Fixed function reference after renaming (initializeImageHandlers → initializeFileHandlers)
+
+### UI Improvements
+- Optimized document display spacing and typography
+- Reduced icon sizes and gaps for compact layout
+- Changed upload notifications from red to blue for better UX
+- Improved document metadata formatting
+
 ## v0.3.0 - Add RLM and Image Upload Support
 
 ### Major Features

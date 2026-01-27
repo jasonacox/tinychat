@@ -7,8 +7,8 @@ async function sendMessage() {
     const input = document.getElementById('messageInput');
     const message = input.value.trim();
     
-    // Allow sending if we have a message OR an attached image
-    if ((!message && !hasAttachedImage()) || isStreaming) return;
+    // Allow sending if we have a message OR an attached file
+    if ((!message && !hasAttachedFile()) || isStreaming) return;
     
     const temperature = parseFloat(document.getElementById('temperature').value);
     const model = document.getElementById('model').value;
@@ -31,7 +31,7 @@ async function sendMessage() {
     const conversation = await getConversation(currentConversationId);
     
     // Update title with first message if still using default
-    const displayMessage = message || '(image)';
+    const displayMessage = message || '(file)';
     if (conversation.title === 'New Conversation' && conversation.messages.length === 0) {
         conversation.title = displayMessage.substring(0, 50) + (displayMessage.length > 50 ? '...' : '');
     }
@@ -39,15 +39,19 @@ async function sendMessage() {
     // Build user message
     const userMessage = {
         role: 'user',
-        content: message || '(image)',
+        content: message || '(file)',
         timestamp: new Date().toISOString()
     };
     
-    // Add image data if attached
-    const imageData = getAttachedImage();
-    if (imageData) {
-        userMessage.image = imageData.data;
-        userMessage.image_type = imageData.type;
+    // Add file data if attached
+    const fileData = getAttachedFile();
+    if (fileData) {
+        if (fileData.type === 'image') {
+            userMessage.image = fileData.data.data;
+            userMessage.image_type = fileData.data.type;
+        } else if (fileData.type === 'document') {
+            userMessage.document = fileData.data;
+        }
     }
     
     // Add user message to local storage
@@ -58,10 +62,10 @@ async function sendMessage() {
     // Clear input and add user message to UI
     input.value = '';
     input.style.height = 'auto';
-    addMessageToUI('user', message || '(image)', new Date().toISOString(), false, imageData);
+    await addMessageToUI('user', message || '(file)', new Date().toISOString(), false, fileData);
     
-    // Clear attached image
-    removeAttachedImage();
+    // Clear attached file
+    removeAttachedFile();
     
     isStreaming = true;
     document.getElementById('sendBtn').disabled = true;
@@ -71,13 +75,22 @@ async function sendMessage() {
     const markdownEnabled = await getMarkdownEnabled();
     
     try {
-        // Send conversation history to API (includes image data)
+        // Send conversation history to API (includes image and document data)
         // Find the most recent N messages with images (N = max_images_in_context from config)
         const maxImagesInContext = appConfig?.max_images_in_context || 1;
         const imageIndices = [];
         for (let i = conversation.messages.length - 1; i >= 0 && imageIndices.length < maxImagesInContext; i--) {
             if (conversation.messages[i].image || conversation.messages[i].has_image) {
                 imageIndices.push(i);
+            }
+        }
+        
+        // Find the most recent N messages with documents (N = max_documents_in_context from config)
+        const maxDocumentsInContext = appConfig?.max_documents_in_context || 1;
+        const documentIndices = [];
+        for (let i = conversation.messages.length - 1; i >= 0 && documentIndices.length < maxDocumentsInContext; i--) {
+            if (conversation.messages[i].document) {
+                documentIndices.push(i);
             }
         }
         
@@ -107,6 +120,11 @@ async function sendMessage() {
                         msg.image_type = 'image/png';
                     }
                 }
+            }
+            
+            // Only include document data for the most recent N documents
+            if (documentIndices.includes(index) && m.document) {
+                msg.document = m.document;
             }
             
             return msg;
@@ -330,7 +348,7 @@ async function handleStreamResponse(response, conversation, markdownEnabled) {
     }
 }
 
-async function addMessageToUI(role, content, timestamp, useMarkdown = false, imageData = null) {
+async function addMessageToUI(role, content, timestamp, useMarkdown = false, fileData = null) {
     const container = document.getElementById('messages');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
@@ -355,26 +373,77 @@ async function addMessageToUI(role, content, timestamp, useMarkdown = false, ima
     const messageContent = document.createElement('div');
     messageContent.className = 'message-content';
     
-    // Add image if present
-    if (imageData) {
-        const img = document.createElement('img');
-        // Check if this is already a complete data URL (generated images)
-        if (imageData.isComplete) {
-            img.src = imageData.data;
-        } else {
-            // User uploaded image - needs data: prefix
-            img.src = `data:${imageData.type};base64,${imageData.data}`;
+    // Add file attachment if present
+    if (fileData) {
+        if (fileData.type === 'image') {
+            // Display image
+            const img = document.createElement('img');
+            // Check if this is already a complete data URL (generated images)
+            if (fileData.data.isComplete) {
+                img.src = fileData.data.data;
+            } else {
+                // User uploaded image - needs data: prefix
+                img.src = `data:${fileData.data.type};base64,${fileData.data.data}`;
+            }
+            img.className = 'message-image';
+            img.alt = 'Uploaded image';
+            img.title = 'Click to view full size';
+            
+            // Click to view full size
+            img.onclick = () => {
+                showImageModal(img.src);
+            };
+            
+            messageContent.appendChild(img);
+        } else if (fileData.type === 'document') {
+            // Display document
+            const docContainer = document.createElement('div');
+            docContainer.className = 'message-document';
+            
+            const docHeader = document.createElement('div');
+            docHeader.className = 'document-header';
+            docHeader.innerHTML = `<div class="document-icon">📄</div><div class="document-info"><div class="document-name">${fileData.data.name}</div><div class="document-meta">${fileData.data.pages} page(s) • ${(fileData.data.size / 1024).toFixed(0)}KB</div></div>`;
+            
+            const expandBtn = document.createElement('button');
+            expandBtn.className = 'document-expand';
+            expandBtn.textContent = 'Show Content ▼';
+            expandBtn.onclick = function() {
+                const content = this.nextElementSibling;
+                if (content.style.display === 'none' || !content.style.display) {
+                    content.style.display = 'block';
+                    this.textContent = 'Hide Content ▲';
+                } else {
+                    content.style.display = 'none';
+                    this.textContent = 'Show Content ▼';
+                }
+            };
+            
+            const docContent = document.createElement('div');
+            docContent.className = 'document-content';
+            docContent.style.display = 'none';
+            // Render document markdown
+            try {
+                const html = renderMarkdownWithMath(fileData.data.markdown);
+                docContent.innerHTML = html;
+                
+                // Apply syntax highlighting to code blocks
+                if (typeof hljs !== 'undefined') {
+                    docContent.querySelectorAll('pre code').forEach(block => {
+                        hljs.highlightElement(block);
+                    });
+                }
+                // Render math equations
+                renderMath(docContent);
+            } catch (e) {
+                console.error('Error rendering document markdown:', e);
+                docContent.textContent = fileData.data.markdown;
+            }
+            
+            docContainer.appendChild(docHeader);
+            docContainer.appendChild(expandBtn);
+            docContainer.appendChild(docContent);
+            messageContent.appendChild(docContainer);
         }
-        img.className = 'message-image';
-        img.alt = 'Uploaded image';
-        img.title = 'Click to view full size';
-        
-        // Click to view full size
-        img.onclick = () => {
-            showImageModal(img.src);
-        };
-        
-        messageContent.appendChild(img);
     }
     
     // Add text content if present
@@ -435,6 +504,15 @@ function showError(message) {
     errorDiv.className = 'error-message';
     errorDiv.textContent = message;
     container.appendChild(errorDiv);
+    scrollToBottom();
+}
+
+function showInfo(message) {
+    const container = document.getElementById('messages');
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 'info-message';
+    infoDiv.textContent = message;
+    container.appendChild(infoDiv);
     scrollToBottom();
 }
 

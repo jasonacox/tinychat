@@ -154,12 +154,25 @@ async def chat_stream(request: ChatRequest, http_request: Request):
                 rlm_count = await StateManager.get_active_rlm_generations()
                 logger.info(f"RLM generation request from {client_ip} for model: {model_to_use} (active RLM: {rlm_count})")
                 
+                # Extract document context from most recent messages (limit by MAX_DOCUMENTS_IN_CONTEXT)
+                document_context = None
+                documents_found = 0
+                for msg in reversed(request.messages):
+                    if msg.get("document") and documents_found < Settings.MAX_DOCUMENTS_IN_CONTEXT:
+                        doc = msg["document"]
+                        if document_context is None:
+                            document_context = f"# Document: {doc['name']}\n\n{doc['markdown']}"
+                        else:
+                            document_context = f"{document_context}\n\n---\n\n# Document: {doc['name']}\n\n{doc['markdown']}"
+                        documents_found += 1
+                
                 # Stream RLM completion
                 assistant_full_content = ""
                 async for chunk in RLMService.stream_rlm_completion(
                     request.messages, 
                     model_to_use,
-                    request.show_rlm_thinking
+                    request.show_rlm_thinking,
+                    document_context
                 ):
                     yield chunk
                     # Extract content for logging
@@ -196,9 +209,12 @@ async def chat_stream(request: ChatRequest, http_request: Request):
         await StateManager.increment_generations()
         
         try:
+            # Inject document context for non-RLM mode
+            messages_with_docs = LLMService.inject_document_context(request.messages)
+            
             assistant_full_content = ""
             async for chunk in LLMService.stream_completion(
-                request.messages, 
+                messages_with_docs, 
                 temp_to_use, 
                 model_to_use
             ):

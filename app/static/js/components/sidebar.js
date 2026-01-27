@@ -94,7 +94,7 @@ async function loadConversation(conversationId) {
                 message.content, 
                 message.timestamp, 
                 true,  // useMarkdown
-                null   // no imageData yet, we'll add it separately
+                null   // no fileData yet, we'll add it separately
             );
             
             // Now add the image container with download button (same as during generation)
@@ -102,19 +102,34 @@ async function loadConversation(conversationId) {
             const imageContainer = createImageContainer(message.image_data);
             messageContent.appendChild(imageContainer);
         } else {
-            // Regular message handling (user messages or assistant text without images)
-            const imageData = (message.image && message.image_type) ? {
-                data: message.image,
-                type: message.image_type,
-                isComplete: false  // User uploaded images need data: prefix
-            } : null;
+            // Regular message handling (user messages or assistant text without images/documents)
+            let fileData = null;
+            
+            // Check for image attachment
+            if (message.image && message.image_type) {
+                fileData = {
+                    type: 'image',
+                    data: {
+                        data: message.image,
+                        type: message.image_type,
+                        isComplete: false  // User uploaded images need data: prefix
+                    }
+                };
+            } 
+            // Check for document attachment
+            else if (message.document) {
+                fileData = {
+                    type: 'document',
+                    data: message.document
+                };
+            }
             
             await addMessageToUI(
                 message.role, 
                 message.content, 
                 message.timestamp, 
                 message.role === 'assistant',
-                imageData
+                fileData
             );
         }
     }

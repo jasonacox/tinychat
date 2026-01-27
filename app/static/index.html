@@ -114,11 +114,11 @@
                 </div>
                 
                 <!-- Hidden file input -->
-                <input type="file" id="imageInput" accept="image/jpeg,image/png,image/gif,image/webp" style="display: none;">
+                <input type="file" id="imageInput" accept="image/*,.txt,.md,.csv,.pdf,.docx,.xlsx,.pptx,.json,.html" style="display: none;">
                 
                 <!-- Input row with attach button -->
                 <div class="input-row">
-                    <button class="attach-btn" onclick="document.getElementById('imageInput').click()" title="Attach image">
+                    <button class="attach-btn" onclick="document.getElementById('imageInput').click()" title="Attach image or document">
                         📎
                     </button>
                     <textarea 
@@ -142,7 +142,7 @@
     <script src="/static/js/config.js"></script>
     <script src="/static/js/utils/storage.js"></script>
     <script src="/static/js/utils/markdown.js"></script>
-    <script src="/static/js/utils/image.js"></script>
+    <script src="/static/js/utils/file-upload.js"></script>
     <script src="/static/js/components/rlm-security.js"></script>
     <script src="/static/js/components/sidebar.js"></script>
     <script src="/static/js/components/chat.js"></script>

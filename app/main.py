@@ -28,6 +28,7 @@ from app.utils.error_handlers import validation_exception_handler
 from app.api.v1.root import router as root_router
 from app.api.v1.chat import router as chat_router
 from app.api.v1.config import router as config_router
+from app.api.v1.documents import router as documents_router
 
 # Configure logging
 logging.basicConfig(
@@ -71,6 +72,7 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.include_router(root_router)
 app.include_router(chat_router)
 app.include_router(config_router)
+app.include_router(documents_router)
 
 # Mount static files
 static_dir = "static" if os.path.exists("static") else "app/static"

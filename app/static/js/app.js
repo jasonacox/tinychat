@@ -133,8 +133,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Configure markdown library
     configureMarked();
     
-    // Initialize image handlers
-    initializeImageHandlers();
+    // Initialize file handlers (images and documents)
+    initializeFileHandlers();
     
     // Initialize RLM security
     await rlmSecurity.initialize();

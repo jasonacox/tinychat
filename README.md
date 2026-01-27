@@ -49,6 +49,7 @@ docker run -d \
 - **💬 Real-time Streaming**: Server-Sent Events for token-by-token responses
 - **🖼️ Image Generation**: Create images with SwarmUI or OpenAI DALL-E
 - **� Vision Model Support**: Upload images to vision-capable models (GPT-4o, Qwen VLM, LLaVA, etc.)
+- **📄 Document Upload**: Parse and chat with documents (PDF, DOCX, XLSX, PPTX, CSV, JSON, HTML, TXT, MD)
 - **�💾 Client-side Storage**: Conversations persist in browser localStorage
 - **⚙️ Smart Defaults**: Model selection and markdown preferences saved automatically
 - **🔒 Security First**: Content Security Policy, input validation, sanitization
@@ -86,6 +87,8 @@ docker run -d \
 | `OPENAI_IMAGE_SIZE` | `1024x1024` | OpenAI image size |
 | `MAX_IMAGE_SIZE_MB` | `10` | Maximum upload image size in MB |
 | `MAX_IMAGES_IN_CONTEXT` | `1` | Max images sent to VLM in conversation context |
+| `MAX_DOCUMENT_SIZE_MB` | `10` | Maximum upload document size in MB |
+| `MAX_DOCUMENTS_IN_CONTEXT` | `1` | Max documents sent to LLM in conversation context |
 | `RLM_TIMEOUT` | `60` | RLM execution timeout (seconds) |
 | `MAX_CONCURRENT_RLM` | `3` | Maximum parallel RLM executions |
 | `RLM_PASSCODE` | *(empty)* | Passcode required to enable RLM (⚠️ **highly recommended**) |
@@ -176,6 +179,47 @@ TinyChat supports uploading images to vision-capable language models for analysi
 
 **Note**: If you upload an image to a non-vision model, TinyChat will automatically detect the error and remove the image from the conversation, allowing you to continue chatting without it.
 
+### Document Upload and Parsing
+
+TinyChat can parse and process documents in multiple formats, making them available as context for your conversations.
+
+**Supported Formats**:
+- **PDF** (.pdf) - Text extraction with page-by-page parsing
+- **Word** (.docx) - Full paragraph and table extraction
+- **Excel** (.xlsx) - Sheet-by-sheet table conversion
+- **PowerPoint** (.pptx) - Slide content with notes
+- **CSV** (.csv) - Structured data parsing
+- **JSON** (.json) - Formatted JSON display
+- **HTML** (.html) - Clean text extraction and markdown conversion
+- **Text** (.txt) - Direct content reading
+- **Markdown** (.md) - Direct content reading
+
+**Usage**:
+- **Drag & Drop**: Drag a document anywhere in the conversation window
+- **Attach Button**: Click the 📎 (paperclip) icon next to the message input
+- **File Selection**: Choose a supported document format (max 10MB)
+
+**Features**:
+- Documents are automatically parsed to markdown format
+- Parsed content is included in conversation context for the LLM
+- By default, only the most recent document is kept in context (configurable)
+- Documents are stored locally in your browser using IndexedDB
+- Expand/collapse view to see parsed content with syntax highlighting
+- Document metadata display (filename, page count, file size)
+- Works in both standard and RLM modes
+
+**Configuration**:
+```bash
+docker run -d \
+  --name tinychat \
+  -p 8000:8000 \
+  -e MAX_DOCUMENT_SIZE_MB=10 \
+  -e MAX_DOCUMENTS_IN_CONTEXT=1 \
+  -e OPENAI_API_URL=https://api.openai.com/v1 \
+  -e OPENAI_API_KEY=your-api-key \
+  jasonacox/tinychat:latest
+```
+
 ### Research Logging
 
 Enable conversation logging for research purposes:
@@ -211,6 +255,9 @@ source .venv/bin/activate
 # Upgrade pip and install Python dependencies
 python -m pip install -U pip
 pip install -r requirements.txt
+
+# Document parsing libraries (included in requirements.txt)
+# PyPDF2, python-docx, openpyxl, python-pptx, beautifulsoup4, markdownify
 
 # (Optional) Install RLM for Recursive Language Model Support
 # Copy RLM and install it

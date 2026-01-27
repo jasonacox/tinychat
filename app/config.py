@@ -67,11 +67,29 @@ class Settings:
     SUPPORTED_IMAGE_TYPES: List[str] = ["image/jpeg", "image/png", "image/gif", "image/webp"]
     MAX_IMAGES_IN_CONTEXT: int = int(os.getenv("MAX_IMAGES_IN_CONTEXT", "1"))
     
+    # Document Upload Configuration
+    MAX_DOCUMENT_SIZE_MB: int = int(os.getenv("MAX_DOCUMENT_SIZE_MB", "10"))
+    MAX_DOCUMENTS_IN_CONTEXT: int = int(os.getenv("MAX_DOCUMENTS_IN_CONTEXT", "1"))
+    SUPPORTED_DOCUMENT_TYPES: List[str] = [
+        "text/plain",           # .txt
+        "text/markdown",        # .md
+        "text/csv",             # .csv
+        "application/pdf",      # .pdf
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  # .docx
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",        # .xlsx
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation", # .pptx
+        "application/json",     # .json
+        "text/html",            # .html
+    ]
+    
     # Session Configuration
     SESSION_TIMEOUT_MINUTES: int = 5
     
     # Available models
     AVAILABLE_MODELS: List[str] = []
+    
+    # RLM availability (set during initialization)
+    HAS_RLM: bool = False
     
     @classmethod
     def initialize(cls):
@@ -91,8 +109,9 @@ class Settings:
         # Check for RLM
         try:
             import rlm
+            from rlm import RLM  # Try to import the actual class
             cls.HAS_RLM = True
-        except ImportError:
+        except (ImportError, AttributeError):
             cls.HAS_RLM = False
         
         cls._log_configuration()

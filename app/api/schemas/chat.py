@@ -2,7 +2,7 @@
 
 import logging
 import re
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 from app.config import Settings
@@ -36,7 +36,7 @@ class ChatRequest(BaseModel):
         rlm_passcode: Passcode for RLM access (required if RLM_PASSCODE is configured)
         show_rlm_thinking: Whether to stream RLM thinking process
     """
-    messages: List[Dict[str, str]] = Field(
+    messages: List[Dict[str, Any]] = Field(
         ..., 
         min_length=1, 
         max_length=Settings.MAX_CONVERSATION_HISTORY
@@ -98,5 +98,26 @@ class ChatRequest(BaseModel):
                 max_size = 10 * 1024 * 1024  # 10MB
                 if estimated_size > max_size:
                     raise ValueError(f"Image too large (max 10MB)")
+            
+            # Validate optional document fields
+            if 'document' in msg:
+                doc = msg['document']
+                if not isinstance(doc, dict):
+                    raise ValueError("Document must be an object")
+                
+                # Check required document fields
+                required_fields = ['name', 'type', 'size', 'pages', 'markdown']
+                for field in required_fields:
+                    if field not in doc:
+                        raise ValueError(f"Document missing required field: {field}")
+                
+                # Validate document type
+                if doc['type'] not in Settings.SUPPORTED_DOCUMENT_TYPES:
+                    raise ValueError(f"Unsupported document type: {doc['type']}")
+                
+                # Validate document size
+                max_doc_size = Settings.MAX_DOCUMENT_SIZE_MB * 1024 * 1024
+                if doc['size'] > max_doc_size:
+                    raise ValueError(f"Document too large (max {Settings.MAX_DOCUMENT_SIZE_MB}MB)")
         
         return v
