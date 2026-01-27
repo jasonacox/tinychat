@@ -65,6 +65,7 @@ class Settings:
     # Image Upload & Vision Configuration
     MAX_IMAGE_SIZE_MB: int = int(os.getenv("MAX_IMAGE_SIZE_MB", "10"))
     SUPPORTED_IMAGE_TYPES: List[str] = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+    MAX_IMAGES_IN_CONTEXT: int = int(os.getenv("MAX_IMAGES_IN_CONTEXT", "1"))
     
     # Session Configuration
     SESSION_TIMEOUT_MINUTES: int = 5

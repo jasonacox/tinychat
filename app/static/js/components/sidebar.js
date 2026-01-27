@@ -84,11 +84,12 @@ async function loadConversation(conversationId) {
     const container = document.getElementById('messages');
     container.innerHTML = '';
     
-    conversation.messages.forEach(message => {
+    // Use for...of instead of forEach to support async/await
+    for (const message of conversation.messages) {
         // For assistant messages with generated images, we need special handling
         if (message.role === 'assistant' && message.has_image && message.image_data) {
             // Add the text message first
-            const messageElement = addMessageToUI(
+            const messageElement = await addMessageToUI(
                 message.role, 
                 message.content, 
                 message.timestamp, 
@@ -108,7 +109,7 @@ async function loadConversation(conversationId) {
                 isComplete: false  // User uploaded images need data: prefix
             } : null;
             
-            addMessageToUI(
+            await addMessageToUI(
                 message.role, 
                 message.content, 
                 message.timestamp, 
@@ -116,7 +117,7 @@ async function loadConversation(conversationId) {
                 imageData
             );
         }
-    });
+    }
     
     scrollToBottom();
 }

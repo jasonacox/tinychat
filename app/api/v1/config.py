@@ -37,8 +37,7 @@ async def get_config():
         "default_model": Settings.DEFAULT_MODEL,
         "default_temperature": Settings.DEFAULT_TEMPERATURE,
         "has_rlm": Settings.HAS_RLM,
-        "max_conversation_history": Settings.MAX_CONVERSATION_HISTORY,
-        "version": Settings.VERSION,
+        "max_conversation_history": Settings.MAX_CONVERSATION_HISTORY,        "max_images_in_context": Settings.MAX_IMAGES_IN_CONTEXT,        "version": Settings.VERSION,
     }
 
 

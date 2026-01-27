@@ -67,18 +67,48 @@ async function sendMessage() {
     document.getElementById('sendBtn').disabled = true;
     document.getElementById('typing').style.display = 'block';
     
+    // Get markdown preference once at start (it's async now)
+    const markdownEnabled = await getMarkdownEnabled();
+    
     try {
         // Send conversation history to API (includes image data)
-        const apiMessages = conversation.messages.map(m => {
+        // Find the most recent N messages with images (N = max_images_in_context from config)
+        const maxImagesInContext = appConfig?.max_images_in_context || 1;
+        const imageIndices = [];
+        for (let i = conversation.messages.length - 1; i >= 0 && imageIndices.length < maxImagesInContext; i--) {
+            if (conversation.messages[i].image || conversation.messages[i].has_image) {
+                imageIndices.push(i);
+            }
+        }
+        
+        const apiMessages = conversation.messages.map((m, index) => {
             const msg = {
                 role: m.role,
                 content: m.content
             };
-            // Include image data if present
-            if (m.image) {
-                msg.image = m.image;
-                msg.image_type = m.image_type;
+            
+            // Only include image data for the most recent N images
+            if (imageIndices.includes(index)) {
+                // Include user-uploaded image data if present
+                if (m.image) {
+                    msg.image = m.image;
+                    msg.image_type = m.image_type;
+                }
+                // Include generated image data if present (for vision models to see their own output)
+                else if (m.has_image && m.image_data) {
+                    // Extract base64 data from data URL if needed
+                    const dataUrlMatch = m.image_data.match(/^data:image\/(\w+);base64,(.+)$/);
+                    if (dataUrlMatch) {
+                        msg.image = dataUrlMatch[2];  // Base64 data
+                        msg.image_type = `image/${dataUrlMatch[1]}`;  // e.g., image/png
+                    } else {
+                        // If it's already in the right format, use as-is
+                        msg.image = m.image_data;
+                        msg.image_type = 'image/png';
+                    }
+                }
             }
+            
             return msg;
         });
         
@@ -112,7 +142,7 @@ async function sendMessage() {
             throw new Error(errText);
         }
         
-        await handleStreamResponse(response, conversation);
+        await handleStreamResponse(response, conversation, markdownEnabled);
         
     } catch (error) {
         showError('Failed to send message: ' + error.message);
@@ -125,7 +155,7 @@ async function sendMessage() {
     }
 }
 
-async function handleStreamResponse(response, conversation) {
+async function handleStreamResponse(response, conversation, markdownEnabled) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     
@@ -208,12 +238,11 @@ async function handleStreamResponse(response, conversation) {
                         
                         if (parsed.content) {
                             if (!assistantMessageElement) {
-                                assistantMessageElement = addMessageToUI('assistant', '', null, true);
+                                assistantMessageElement = await addMessageToUI('assistant', '', null, true);
                             }
                             
                             assistantContent += parsed.content;
                             const messageContent = assistantMessageElement.querySelector('.message-content');
-                            const markdownEnabled = getMarkdownEnabled();
                             
                             if (markdownEnabled && typeof marked !== 'undefined') {
                                 try {
@@ -244,7 +273,7 @@ async function handleStreamResponse(response, conversation) {
                         // Handle image response
                         if (parsed.image) {
                             if (!assistantMessageElement) {
-                                assistantMessageElement = addMessageToUI('assistant', parsed.content || 'Here is your image.');
+                                assistantMessageElement = await addMessageToUI('assistant', parsed.content || 'Here is your image.');
                                 assistantContent = parsed.content || 'Here is your image.';
                             }
                             
@@ -301,7 +330,7 @@ async function handleStreamResponse(response, conversation) {
     }
 }
 
-function addMessageToUI(role, content, timestamp, useMarkdown = false, imageData = null) {
+async function addMessageToUI(role, content, timestamp, useMarkdown = false, imageData = null) {
     const container = document.getElementById('messages');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
@@ -351,7 +380,7 @@ function addMessageToUI(role, content, timestamp, useMarkdown = false, imageData
     // Add text content if present
     if (content) {
         // Apply markdown rendering if enabled and requested
-        const markdownEnabled = getMarkdownEnabled();
+        const markdownEnabled = await getMarkdownEnabled();
         
         if (useMarkdown && markdownEnabled && role === 'assistant' && typeof marked !== 'undefined') {
             try {

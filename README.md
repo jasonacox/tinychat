@@ -85,6 +85,7 @@ docker run -d \
 | `OPENAI_IMAGE_MODEL` | `dall-e-3` | OpenAI image model |
 | `OPENAI_IMAGE_SIZE` | `1024x1024` | OpenAI image size |
 | `MAX_IMAGE_SIZE_MB` | `10` | Maximum upload image size in MB |
+| `MAX_IMAGES_IN_CONTEXT` | `1` | Max images sent to VLM in conversation context |
 | `RLM_TIMEOUT` | `60` | RLM execution timeout (seconds) |
 | `MAX_CONCURRENT_RLM` | `3` | Maximum parallel RLM executions |
 | `RLM_PASSCODE` | *(empty)* | Passcode required to enable RLM (⚠️ **highly recommended**) |
