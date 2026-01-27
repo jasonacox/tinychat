@@ -1,7 +1,7 @@
 // Sidebar component - conversation management
 
 async function loadConversations() {
-    const conversations = getConversations();
+    const conversations = await getConversations();
     const container = document.getElementById('conversations');
     container.innerHTML = '';
     
@@ -55,7 +55,7 @@ async function createNewConversation() {
         </div>
     `;
     
-    loadConversations();
+    await loadConversations();
     
     // Set focus to message input for immediate typing
     document.getElementById('messageInput').focus();
@@ -75,7 +75,7 @@ async function loadConversation(conversationId) {
         activeItem.classList.add('active');
     }
     
-    const conversation = getConversation(conversationId);
+    const conversation = await getConversation(conversationId);
     if (!conversation) {
         showError('Conversation not found');
         return;
@@ -84,21 +84,55 @@ async function loadConversation(conversationId) {
     const container = document.getElementById('messages');
     container.innerHTML = '';
     
-    conversation.messages.forEach(message => {
-        // Prepare image data if present
-        const imageData = (message.image && message.image_type) ? {
-            data: message.image,
-            type: message.image_type
-        } : null;
-        
-        addMessageToUI(
-            message.role, 
-            message.content, 
-            message.timestamp, 
-            message.role === 'assistant',
-            imageData
-        );
-    });
+    // Use for...of instead of forEach to support async/await
+    for (const message of conversation.messages) {
+        // For assistant messages with generated images, we need special handling
+        if (message.role === 'assistant' && message.has_image && message.image_data) {
+            // Add the text message first
+            const messageElement = await addMessageToUI(
+                message.role, 
+                message.content, 
+                message.timestamp, 
+                true,  // useMarkdown
+                null   // no fileData yet, we'll add it separately
+            );
+            
+            // Now add the image container with download button (same as during generation)
+            const messageContent = messageElement.querySelector('.message-content');
+            const imageContainer = createImageContainer(message.image_data);
+            messageContent.appendChild(imageContainer);
+        } else {
+            // Regular message handling (user messages or assistant text without images/documents)
+            let fileData = null;
+            
+            // Check for image attachment
+            if (message.image && message.image_type) {
+                fileData = {
+                    type: 'image',
+                    data: {
+                        data: message.image,
+                        type: message.image_type,
+                        isComplete: false  // User uploaded images need data: prefix
+                    }
+                };
+            } 
+            // Check for document attachment
+            else if (message.document) {
+                fileData = {
+                    type: 'document',
+                    data: message.document
+                };
+            }
+            
+            await addMessageToUI(
+                message.role, 
+                message.content, 
+                message.timestamp, 
+                message.role === 'assistant',
+                fileData
+            );
+        }
+    }
     
     scrollToBottom();
 }
@@ -165,4 +199,65 @@ function createImageContainer(imageData) {
     imageContainer.appendChild(downloadBtn);
     
     return imageContainer;
+}
+
+// Export conversations to JSON file
+async function exportConversations() {
+    try {
+        const data = await storageAdapter.exportData();
+        const json = JSON.stringify(data, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `tinychat-export-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showError('✅ Conversations exported successfully');
+    } catch (error) {
+        console.error('Export failed:', error);
+        showError('Failed to export conversations: ' + error.message);
+    }
+}
+
+// Import conversations from JSON file
+async function importConversations(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        
+        // Validate data structure
+        if (!data || typeof data !== 'object') {
+            throw new Error('Invalid data format');
+        }
+        
+        // Confirm import
+        const conversationCount = data.conversations ? Object.keys(data.conversations).length : 0;
+        if (!confirm(`Import ${conversationCount} conversations? This will merge with existing data.`)) {
+            return;
+        }
+        
+        // Import data
+        await storageAdapter.importData(data);
+        
+        // Reload UI
+        await loadConversations();
+        await updateStorageMeter();
+        
+        showError(`✅ Successfully imported ${conversationCount} conversations`);
+        
+        // Clear file input
+        event.target.value = '';
+    } catch (error) {
+        console.error('Import failed:', error);
+        showError('Failed to import conversations: ' + error.message);
+        event.target.value = '';
+    }
 }

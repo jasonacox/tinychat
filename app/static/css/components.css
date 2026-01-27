@@ -73,6 +73,15 @@
     border-left: 3px solid #c33;
 }
 
+.info-message {
+    background: #e8f4fd;
+    color: #1976d2;
+    padding: 10px;
+    border-radius: 4px;
+    margin: 10px 0;
+    border-left: 3px solid #1976d2;
+}
+
 /* RLM Passcode Modal */
 .rlm-passcode-modal .modal-overlay {
     position: fixed;
@@ -271,4 +280,202 @@
     color: #007bff;
     font-weight: 500;
     pointer-events: none;
+}
+
+/* Storage Meter */
+.storage-meter {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.storage-meter-bar {
+    height: 8px;
+    background: #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.storage-meter-fill {
+    height: 100%;
+    background: #10b981;
+    transition: width 0.3s ease, background-color 0.3s ease;
+    border-radius: 4px;
+}
+
+.storage-meter-text {
+    font-size: 11px;
+    color: #666;
+    text-align: center;
+}
+
+/* Document Upload & Display */
+
+.file-preview-container {
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 8px;
+}
+
+.document-preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: white;
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid #dee2e6;
+}
+
+.document-icon {
+    font-size: 32px;
+    line-height: 1;
+}
+
+.document-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.document-name {
+    font-weight: 500;
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.document-meta {
+    font-size: 12px;
+    color: #666;
+    margin-top: 2px;
+}
+
+.remove-file {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #dc3545;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.remove-file:hover {
+    background: #c82333;
+}
+
+/* Document in Message */
+
+.message-document {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin: 8px 0;
+    max-width: 500px;
+}
+
+.document-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.message-document .document-icon {
+    font-size: 24px;
+    line-height: 1;
+}
+
+.message-document .document-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.message-document .document-name {
+    font-weight: 500;
+    font-size: 13px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin: 0;
+}
+
+.message-document .document-meta {
+    font-size: 11px;
+    color: #666;
+    margin-top: 2px;
+}
+
+.document-expand {
+    width: 100%;
+    margin-top: 6px;
+    padding: 6px 8px;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.2s;
+}
+
+.document-expand:hover {
+    background: #e9ecef;
+}
+
+.document-content {
+    margin-top: 12px;
+    padding: 12px;
+    background: white;
+    border-radius: 4px;
+    max-height: 400px;
+    overflow-y: auto;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.document-content h1,
+.document-content h2,
+.document-content h3 {
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+}
+
+.document-content code {
+    background: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+.document-content pre {
+    background: #f8f9fa;
+    padding: 12px;
+    border-radius: 4px;
+    overflow-x: auto;
+}
+
+.document-content table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 8px 0;
+}
+
+.document-content th,
+.document-content td {
+    border: 1px solid #dee2e6;
+    padding: 8px;
+    text-align: left;
+}
+
+.document-content th {
+    background: #f8f9fa;
+    font-weight: 600;
 }

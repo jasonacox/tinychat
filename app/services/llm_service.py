@@ -16,6 +16,66 @@ class LLMService:
     """Service for interacting with LLM APIs."""
     
     @staticmethod
+    def inject_document_context(messages: List[Dict], max_documents: int = None) -> List[Dict]:
+        """
+        Inject document context into system message for non-RLM sessions.
+        
+        Finds the most recent N documents and prepends them to the conversation
+        as a system message.
+        
+        Args:
+            messages: Conversation history
+            max_documents: Maximum number of documents to include (defaults to MAX_DOCUMENTS_IN_CONTEXT)
+            
+        Returns:
+            Modified messages with document context injected
+        """
+        if max_documents is None:
+            max_documents = Settings.MAX_DOCUMENTS_IN_CONTEXT
+        
+        # Find recent documents
+        documents = []
+        for msg in reversed(messages):
+            if msg.get("document") and len(documents) < max_documents:
+                doc = msg["document"]
+                documents.insert(0, {
+                    "name": doc["name"],
+                    "content": doc["markdown"]
+                })
+        
+        if not documents:
+            return messages
+        
+        # Build context string
+        context_parts = []
+        for doc in documents:
+            context_parts.append(f"# Document: {doc['name']}\n\n{doc['content']}")
+        
+        context_message = {
+            "role": "system",
+            "content": f"""The following documents have been provided as context. Use them to answer the user's questions:
+
+{chr(10).join(context_parts)}
+
+---
+
+Answer the user's questions based on the above context."""
+        }
+        
+        # Insert at beginning (after any existing system messages)
+        modified = messages.copy()
+        system_idx = 0
+        for i, msg in enumerate(modified):
+            if msg["role"] == "system":
+                system_idx = i + 1
+            else:
+                break
+        
+        modified.insert(system_idx, context_message)
+        logger.debug(f"Injected {len(documents)} document(s) into conversation context")
+        return modified
+    
+    @staticmethod
     def filter_images_keep_latest(messages: List[Dict]) -> List[Dict]:
         """
         Remove all images except the most recent one.

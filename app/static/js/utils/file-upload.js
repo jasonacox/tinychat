@@ -1,21 +1,22 @@
 /**
- * Image handling utilities for file upload, compression, and base64 conversion.
+ * File handling utilities for image and document upload.
  */
 
-// Global state for attached image
+// Global state for attached files
 let attachedImage = null; // { data: "base64...", type: "image/jpeg", fileName: "..." }
+let attachedDocument = null; // { name, type, size, pages, markdown, uploadedAt }
 
 /**
- * Initialize image upload handlers.
+ * Initialize file upload handlers.
  */
-function initializeImageHandlers() {
-    const imageInput = document.getElementById('imageInput');
+function initializeFileHandlers() {
+    const fileInput = document.getElementById('imageInput'); // Keep same ID for backward compatibility
     const inputContainer = document.querySelector('.input-container');
     const messagesArea = document.getElementById('messages');
     
     // File input change handler
-    if (imageInput) {
-        imageInput.addEventListener('change', handleImageSelect);
+    if (fileInput) {
+        fileInput.addEventListener('change', handleFileSelect);
     }
     
     // Drag and drop handlers for input container
@@ -33,14 +34,47 @@ function initializeImageHandlers() {
     }
 }
 
+// For backward compatibility
+const initializeImageHandlers = initializeFileHandlers;
+
 /**
  * Handle file input selection.
  */
-async function handleImageSelect(event) {
+async function handleFileSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
     
-    await processImageFile(file);
+    await processFile(file);
+}
+
+/**
+ * Process file - route to image or document handler.
+ */
+async function processFile(file) {
+    const fileType = getFileType(file);
+    
+    if (fileType === 'image') {
+        await processImageFile(file);
+    } else if (fileType === 'document') {
+        await processDocumentFile(file);
+    } else {
+        showError('Unsupported file type. Please upload an image or supported document format.');
+    }
+}
+
+/**
+ * Determine file type (image or document).
+ */
+function getFileType(file) {
+    const imageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    const documentTypes = appConfig?.supported_document_types || [];
+    
+    if (imageTypes.includes(file.type)) {
+        return 'image';
+    } else if (documentTypes.includes(file.type)) {
+        return 'document';
+    }
+    return 'unknown';
 }
 
 /**
@@ -171,36 +205,6 @@ function showImagePreview(base64Data, mimeType, fileName) {
 }
 
 /**
- * Remove attached image.
- */
-function removeAttachedImage() {
-    attachedImage = null;
-    const preview = document.getElementById('imagePreview');
-    const imageInput = document.getElementById('imageInput');
-    
-    if (preview) {
-        preview.style.display = 'none';
-    }
-    if (imageInput) {
-        imageInput.value = '';
-    }
-}
-
-/**
- * Get current attached image.
- */
-function getAttachedImage() {
-    return attachedImage;
-}
-
-/**
- * Check if image is attached.
- */
-function hasAttachedImage() {
-    return attachedImage !== null;
-}
-
-/**
  * Drag over handler.
  */
 function handleDragOver(e) {
@@ -227,7 +231,153 @@ async function handleDrop(e) {
     e.currentTarget.classList.remove('drag-over');
     
     const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) {
-        await processImageFile(file);
+    if (file) {
+        await processFile(file);
     }
+}
+
+/**
+ * Process document file (upload to backend for parsing).
+ */
+async function processDocumentFile(file) {
+    const maxSize = (appConfig?.max_document_size_mb || 10) * 1024 * 1024;
+    
+    if (file.size > maxSize) {
+        showError(`Document too large. Maximum size: ${(maxSize / 1024 / 1024).toFixed(0)}MB`);
+        return;
+    }
+    
+    // Show upload indicator
+    showInfo('📄 Uploading and parsing document...');
+    
+    try {
+        // Upload to backend for parsing
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await fetch('/api/documents/parse', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to parse document');
+        }
+        
+        const parsed = await response.json();
+        
+        // Store parsed document
+        attachedDocument = {
+            name: parsed.filename,
+            type: parsed.type,
+            size: parsed.size,
+            pages: parsed.pages,
+            markdown: parsed.markdown,
+            uploadedAt: new Date().toISOString()
+        };
+        
+        // Show preview
+        showDocumentPreview(attachedDocument);
+        showInfo(`✅ Document parsed: ${parsed.pages} page(s), ${(parsed.size / 1024).toFixed(0)}KB`);
+        
+    } catch (error) {
+        console.error('Document upload error:', error);
+        showError('Failed to upload document: ' + error.message);
+        attachedDocument = null;
+    }
+}
+
+/**
+ * Show document preview in the UI.
+ */
+function showDocumentPreview(docData) {
+    // Remove any existing preview
+    const existingPreview = document.getElementById('filePreviewContainer');
+    if (existingPreview) {
+        existingPreview.remove();
+    }
+    
+    // Create preview container
+    const container = document.createElement('div');
+    container.id = 'filePreviewContainer';
+    container.className = 'file-preview-container';
+    container.innerHTML = `
+        <div class="document-preview">
+            <div class="document-icon">📄</div>
+            <div class="document-info">
+                <div class="document-name">${docData.name}</div>
+                <div class="document-meta">${docData.pages} page(s) • ${(docData.size / 1024).toFixed(0)}KB</div>
+            </div>
+            <button class="remove-file" onclick="removeAttachedFile()" title="Remove document">×</button>
+        </div>
+    `;
+    
+    // Insert before input area
+    const inputContainer = document.querySelector('.input-container');
+    if (inputContainer) {
+        inputContainer.parentElement.insertBefore(container, inputContainer);
+    }
+}
+
+/**
+ * Remove attached file (image or document).
+ */
+function removeAttachedFile() {
+    attachedImage = null;
+    attachedDocument = null;
+    
+    // Remove image preview
+    const imagePreview = document.getElementById('imagePreview');
+    if (imagePreview) {
+        imagePreview.style.display = 'none';
+    }
+    
+    // Remove document preview
+    const filePreview = document.getElementById('filePreviewContainer');
+    if (filePreview) {
+        filePreview.remove();
+    }
+    
+    // Clear file input
+    const fileInput = document.getElementById('imageInput');
+    if (fileInput) {
+        fileInput.value = '';
+    }
+}
+
+/**
+ * Check if any file is attached.
+ */
+function hasAttachedFile() {
+    return attachedImage !== null || attachedDocument !== null;
+}
+
+/**
+ * Get attached file data.
+ */
+function getAttachedFile() {
+    if (attachedImage) {
+        return {
+            type: 'image',
+            data: attachedImage
+        };
+    } else if (attachedDocument) {
+        return {
+            type: 'document',
+            data: attachedDocument
+        };
+    }
+    return null;
+}
+
+// Backward compatibility functions
+const removeAttachedImage = removeAttachedFile;
+const hasAttachedImage = hasAttachedFile;
+
+/**
+ * Get attached image (backward compatibility).
+ */
+function getAttachedImage() {
+    return attachedImage;
 }
