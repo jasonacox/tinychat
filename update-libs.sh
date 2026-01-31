@@ -72,13 +72,23 @@ echo -e "${GREEN}  ✓ Downloaded katex-auto-render.min.js${NC}"
 echo "  Downloading KaTeX fonts..."
 mkdir -p fonts
 curl -sL "https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/fonts/KaTeX_Main-Regular.woff2" -o fonts/KaTeX_Main-Regular.woff2
+curl -sL "https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/fonts/KaTeX_Main-Bold.woff2" -o fonts/KaTeX_Main-Bold.woff2
+curl -sL "https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/fonts/KaTeX_Main-Italic.woff2" -o fonts/KaTeX_Main-Italic.woff2
+curl -sL "https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/fonts/KaTeX_Main-BoldItalic.woff2" -o fonts/KaTeX_Main-BoldItalic.woff2
 curl -sL "https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/fonts/KaTeX_Math-Italic.woff2" -o fonts/KaTeX_Math-Italic.woff2
 curl -sL "https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/fonts/KaTeX_Size1-Regular.woff2" -o fonts/KaTeX_Size1-Regular.woff2
 curl -sL "https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/fonts/KaTeX_Size2-Regular.woff2" -o fonts/KaTeX_Size2-Regular.woff2
+curl -sL "https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/fonts/KaTeX_Size3-Regular.woff2" -o fonts/KaTeX_Size3-Regular.woff2
+curl -sL "https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/fonts/KaTeX_Size4-Regular.woff2" -o fonts/KaTeX_Size4-Regular.woff2
 curl -sL "https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/fonts/KaTeX_AMS-Regular.woff2" -o fonts/KaTeX_AMS-Regular.woff2
 curl -sL "https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/fonts/KaTeX_Caligraphic-Bold.woff2" -o fonts/KaTeX_Caligraphic-Bold.woff2
 curl -sL "https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/fonts/KaTeX_Fraktur-Regular.woff2" -o fonts/KaTeX_Fraktur-Regular.woff2
-echo -e "${GREEN}  ✓ Downloaded 7 KaTeX fonts${NC}"
+curl -sL "https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/fonts/KaTeX_Script-Regular.woff2" -o fonts/KaTeX_Script-Regular.woff2
+curl -sL "https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/fonts/KaTeX_Typewriter-Regular.woff2" -o fonts/KaTeX_Typewriter-Regular.woff2
+curl -sL "https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/fonts/KaTeX_SansSerif-Regular.woff2" -o fonts/KaTeX_SansSerif-Regular.woff2
+curl -sL "https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/fonts/KaTeX_SansSerif-Bold.woff2" -o fonts/KaTeX_SansSerif-Bold.woff2
+curl -sL "https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/fonts/KaTeX_SansSerif-Italic.woff2" -o fonts/KaTeX_SansSerif-Italic.woff2
+echo -e "${GREEN}  ✓ Downloaded 17 KaTeX fonts${NC}"
 echo ""
 
 # LocalForage - IndexedDB wrapper
