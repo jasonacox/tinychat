@@ -74,6 +74,22 @@ New document-related environment variables:
 - Reduced icon sizes and gaps for compact layout
 - Changed upload notifications from red to blue for better UX
 - Improved document metadata formatting
+- **Mobile Responsive Design**: Enhanced mobile device support
+  - Sidebar automatically hidden on devices ≤768px width
+  - Fixed iOS Safari auto-zoom issue (input font-size set to 16px on mobile)
+  - Main content takes full viewport width on mobile
+  - Optimized padding and layout for small screens
+  - Settings stack vertically on narrow displays
+
+### Infrastructure Changes
+- **Local Library Hosting**: Migrated frontend libraries from CDN to local hosting
+  - All JavaScript libraries now served from `/static/libs/`
+  - Marked.js (11.1.1), Highlight.js (11.9.0), KaTeX (0.16.9), LocalForage (1.10.0)
+  - Includes KaTeX fonts for complete offline math rendering
+  - Eliminates external CDN dependencies for improved privacy and offline capability
+  - Added `update-libs.sh` script for easy library version updates
+  - Created THIRD-PARTY-LICENSES.md with complete license information
+  - Updated README.md with library credits and attribution
 
 ## v0.3.0 - Add RLM and Image Upload Support
 

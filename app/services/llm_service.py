@@ -46,20 +46,37 @@ class LLMService:
         if not documents:
             return messages
         
+        # Check if there are images in the conversation
+        has_images = any(msg.get('image') for msg in messages)
+        
         # Build context string
         context_parts = []
         for doc in documents:
             context_parts.append(f"# Document: {doc['name']}\n\n{doc['content']}")
         
-        context_message = {
-            "role": "system",
-            "content": f"""The following documents have been provided as context. Use them to answer the user's questions:
+        # Make the instruction more prominent if there are also images
+        if has_images:
+            instruction = """IMPORTANT: The following documents have been provided as context. When answering questions, you must consider BOTH the document content below AND any images in the conversation. Give equal weight to both sources of information.
 
-{chr(10).join(context_parts)}
+Documents:
+
+{documents}
+
+---
+
+Base your answers on both the document content above and any images provided in the conversation."""
+        else:
+            instruction = """The following documents have been provided as context. Use them to answer the user's questions:
+
+{documents}
 
 ---
 
 Answer the user's questions based on the above context."""
+        
+        context_message = {
+            "role": "system",
+            "content": instruction.format(documents=chr(10).join(context_parts))
         }
         
         # Insert at beginning (after any existing system messages)
@@ -72,7 +89,8 @@ Answer the user's questions based on the above context."""
                 break
         
         modified.insert(system_idx, context_message)
-        logger.debug(f"Injected {len(documents)} document(s) into conversation context")
+        logger.debug(f"Injected {len(documents)} document(s) into conversation context at index {system_idx}")
+        logger.debug(f"Document context preview: {context_message['content'][:200]}...")
         return modified
     
     @staticmethod
@@ -191,6 +209,16 @@ Answer the user's questions based on the above context."""
         model = model or Settings.DEFAULT_MODEL
         
         logger.debug(f"Streaming: {len(messages)} messages → model={model}, temp={temperature}")
+        
+        # Check for images and documents in the conversation
+        has_images = any(msg.get('image') for msg in messages)
+        has_documents = any(msg.get('document') for msg in messages)
+        if has_images and has_documents:
+            logger.warning(f"⚠️  Conversation has both images AND documents - both should be in context")
+        elif has_images:
+            logger.debug(f"📷 Conversation includes images")
+        elif has_documents:
+            logger.debug(f"📄 Conversation includes documents")
         
         # Filter images (keep only the most recent one)
         messages = LLMService.filter_images_keep_latest(messages)

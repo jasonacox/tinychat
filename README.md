@@ -289,6 +289,22 @@ The `local.sh` script includes several helpful commands:
 ./local.sh help          # Show all commands
 ```
 
+### Updating Frontend Libraries
+
+TinyChat includes local copies of frontend libraries (Marked.js, Highlight.js, KaTeX, LocalForage). To update them:
+
+```bash
+./update-libs.sh
+```
+
+This script:
+- Downloads the latest versions of all frontend libraries
+- Creates a timestamped backup of the current libraries
+- Reports the new version numbers
+- Provides rollback instructions if needed
+
+After updating, test thoroughly and update [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md) with new version numbers.
+
 ### Building from Source
 
 Build and run using Docker:
@@ -540,6 +556,30 @@ Contributions welcome! Please:
 - **RLM Integration**: [Recursive Language Models](https://github.com/alexzhang13/rlm) - Agentic reasoning framework by Alex L. Zhang, Tim Kraska, and Omar Khattab ([arXiv:2512.24601](https://arxiv.org/abs/2512.24601))
 - **Built with**: [Claude](https://claude.ai) - AI pair programming assistant
 - **Author**: Jason A. Cox ([@jasonacox](https://github.com/jasonacox))
+
+### Third-Party Libraries
+
+TinyChat is built with excellent open-source libraries:
+
+**Frontend:**
+- [Marked.js](https://github.com/markedjs/marked) (MIT) - Markdown rendering
+- [Highlight.js](https://github.com/highlightjs/highlight.js) (BSD-3-Clause) - Syntax highlighting
+- [KaTeX](https://github.com/KaTeX/KaTeX) (MIT) - Math equation rendering
+- [LocalForage](https://github.com/localForage/localForage) (Apache-2.0) - IndexedDB wrapper
+
+**Backend:**
+- [FastAPI](https://github.com/tiangolo/fastapi) (MIT) - Web framework
+- [Uvicorn](https://github.com/encode/uvicorn) (BSD-3-Clause) - ASGI server
+- [httpx](https://github.com/encode/httpx) (BSD-3-Clause) - HTTP client
+- [Pydantic](https://github.com/pydantic/pydantic) (MIT) - Data validation
+- [PyPDF2](https://github.com/py-pdf/pypdf) (BSD-3-Clause) - PDF parsing
+- [python-docx](https://github.com/python-openxml/python-docx) (MIT) - Word document parsing
+- [openpyxl](https://github.com/chronossc/openpyxl) (MIT) - Excel parsing
+- [python-pptx](https://github.com/scanny/python-pptx) (MIT) - PowerPoint parsing
+- [beautifulsoup4](https://www.crummy.com/software/BeautifulSoup/) (MIT) - HTML parsing
+- [markdownify](https://github.com/matthewwithanm/python-markdownify) (MIT) - HTML to Markdown conversion
+
+See [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md) for complete license information.
 
 <img width="500" alt="image" src="https://github.com/user-attachments/assets/cd39f8e8-caf5-4789-8333-653bb5fd2ad0" />
 
