@@ -46,7 +46,7 @@ async function createNewConversation() {
         last_updated: new Date().toISOString()
     };
     
-    saveConversation(conversationId, conversation);
+    await saveConversation(conversationId, conversation);
     currentConversationId = conversationId;
     
     document.getElementById('messages').innerHTML = `
@@ -217,7 +217,7 @@ async function exportConversations() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        showError('✅ Conversations exported successfully');
+        showInfo('✅ Conversations exported successfully');
     } catch (error) {
         console.error('Export failed:', error);
         showError('Failed to export conversations: ' + error.message);
@@ -238,8 +238,9 @@ async function importConversations(event) {
             throw new Error('Invalid data format');
         }
         
-        // Confirm import
-        const conversationCount = data.conversations ? Object.keys(data.conversations).length : 0;
+        // Extract conversation count from the actual export format
+        const conversations = data.data?.tinychat_conversations;
+        const conversationCount = conversations ? Object.keys(conversations).length : 0;
         if (!confirm(`Import ${conversationCount} conversations? This will merge with existing data.`)) {
             return;
         }

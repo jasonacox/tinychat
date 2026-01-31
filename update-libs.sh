@@ -99,6 +99,14 @@ curl -sL "https://cdn.jsdelivr.net/npm/localforage@${LOCALFORAGE_VERSION}/dist/l
 echo -e "${GREEN}  ✓ Downloaded localforage.min.js${NC}"
 echo ""
 
+# DOMPurify - HTML sanitization
+echo -e "${YELLOW}→ DOMPurify (HTML sanitization for XSS prevention)${NC}"
+DOMPURIFY_VERSION=$(curl -s https://api.github.com/repos/cure53/DOMPurify/releases/latest | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+echo "  Latest version: $DOMPURIFY_VERSION"
+curl -sL "https://cdn.jsdelivr.net/npm/dompurify@${DOMPURIFY_VERSION}/dist/purify.min.js" -o purify.min.js
+echo -e "${GREEN}  ✓ Downloaded purify.min.js${NC}"
+echo ""
+
 # Summary
 echo -e "${GREEN}=== Update Complete ===${NC}"
 echo ""
@@ -107,6 +115,7 @@ echo "  • Marked.js:    $MARKED_VERSION"
 echo "  • Highlight.js: $HLJS_VERSION"
 echo "  • KaTeX:        $KATEX_VERSION"
 echo "  • LocalForage:  $LOCALFORAGE_VERSION"
+echo "  • DOMPurify:    $DOMPURIFY_VERSION"
 echo ""
 echo -e "${BLUE}Backup saved to: ${BACKUP_DIR}${NC}"
 echo ""

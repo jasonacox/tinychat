@@ -3,7 +3,7 @@
 import io
 import json
 import logging
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 import PyPDF2
 from docx import Document as DocxDocument
 from openpyxl import load_workbook
@@ -141,7 +141,7 @@ class DocumentParser:
         
         pages = []
         for i, page in enumerate(reader.pages):
-            text = page.extract_text()
+            text = page.extract_text() or ""
             if text.strip():
                 pages.append(f"## Page {i + 1}\n\n{text}")
         
