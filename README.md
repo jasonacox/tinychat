@@ -566,6 +566,7 @@ TinyChat is built with excellent open-source libraries:
 - [Highlight.js](https://github.com/highlightjs/highlight.js) (BSD-3-Clause) - Syntax highlighting
 - [KaTeX](https://github.com/KaTeX/KaTeX) (MIT) - Math equation rendering
 - [LocalForage](https://github.com/localForage/localForage) (Apache-2.0) - IndexedDB wrapper
+- [DOMPurify](https://github.com/cure53/DOMPurify) (Apache-2.0/MPL-2.0) - HTML sanitization
 
 **Backend:**
 - [FastAPI](https://github.com/tiangolo/fastapi) (MIT) - Web framework

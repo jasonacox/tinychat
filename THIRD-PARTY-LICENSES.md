@@ -123,6 +123,23 @@ and distribution as defined by Sections 1 through 9 of this document.
 [Full Apache 2.0 license text available at: http://www.apache.org/licenses/LICENSE-2.0]
 ```
 
+### DOMPurify
+- **Purpose**: HTML sanitization for XSS prevention
+- **Version**: 3.0.8
+- **License**: Apache-2.0 or MPL-2.0
+- **Repository**: https://github.com/cure53/DOMPurify
+- **Copyright**: Copyright 2015 Dr.-Ing. Mario Heiderich, Cure53
+
+```
+DOMPurify is dual-licensed under Apache-2.0 and MPL-2.0.
+
+Apache License
+Version 2.0, January 2004
+http://www.apache.org/licenses/
+
+[Full Apache 2.0 license text available at: http://www.apache.org/licenses/LICENSE-2.0]
+```
+
 ## Python Libraries
 
 TinyChat also uses various Python libraries listed in `requirements.txt`. Each maintains its own license:
