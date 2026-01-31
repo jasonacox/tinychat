@@ -50,7 +50,7 @@ docker run -d \
 - **🖼️ Image Generation**: Create images with SwarmUI or OpenAI DALL-E
 - **� Vision Model Support**: Upload images to vision-capable models (GPT-4o, Qwen VLM, LLaVA, etc.)
 - **📄 Document Upload**: Parse and chat with documents (PDF, DOCX, XLSX, PPTX, CSV, JSON, HTML, TXT, MD)
-- **�💾 Client-side Storage**: Conversations persist in browser localStorage
+- **💾 Client-side Storage**: Conversations persist in browser storage via IndexedDB (using localForage), with automatic migration from any existing localStorage data
 - **⚙️ Smart Defaults**: Model selection and markdown preferences saved automatically
 - **🔒 Security First**: Content Security Policy, input validation, sanitization
 - **📊 Stateless**: Zero server-side memory, horizontally scalable
