@@ -86,7 +86,10 @@ function renderMarkdownWithMath(content) {
     });
 
     // Step 2: Process markdown
-    const html = typeof marked.parse === 'function' ? marked.parse(processedContent) : marked(processedContent);
+    let html = typeof marked.parse === 'function' ? marked.parse(processedContent) : marked(processedContent);
+    
+    // Step 2.5: Sanitize HTML to prevent XSS from uploaded documents
+    html = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
     
     // Step 3: Restore LaTeX blocks
     let finalHtml = html;

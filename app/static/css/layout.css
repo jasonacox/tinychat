@@ -76,5 +76,35 @@
         flex-direction: column;
         gap: 10px;
         align-items: flex-start;
+        width: 100%;
+    }
+    
+    .setting-group {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .chat-title {
+        font-size: 16px;
+        margin-bottom: 8px;
+    }
+}
+
+/* Extra small mobile */
+@media (max-width: 480px) {
+    .chat-header {
+        padding: 10px;
+    }
+    
+    .chat-input-area {
+        padding: 10px;
+    }
+    
+    .settings {
+        gap: 8px;
+    }
+    
+    .setting-group {
+        font-size: 13px;
     }
 }

@@ -38,6 +38,10 @@ async def get_config():
         "default_temperature": Settings.DEFAULT_TEMPERATURE,
         "has_rlm": Settings.HAS_RLM,
         "max_conversation_history": Settings.MAX_CONVERSATION_HISTORY,
+        "max_images_in_context": Settings.MAX_IMAGES_IN_CONTEXT,
+        "max_document_size_mb": Settings.MAX_DOCUMENT_SIZE_MB,
+        "max_documents_in_context": Settings.MAX_DOCUMENTS_IN_CONTEXT,
+        "supported_document_types": Settings.SUPPORTED_DOCUMENT_TYPES,
         "version": Settings.VERSION,
     }
 

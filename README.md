@@ -49,7 +49,8 @@ docker run -d \
 - **💬 Real-time Streaming**: Server-Sent Events for token-by-token responses
 - **🖼️ Image Generation**: Create images with SwarmUI or OpenAI DALL-E
 - **� Vision Model Support**: Upload images to vision-capable models (GPT-4o, Qwen VLM, LLaVA, etc.)
-- **�💾 Client-side Storage**: Conversations persist in browser localStorage
+- **📄 Document Upload**: Parse and chat with documents (PDF, DOCX, XLSX, PPTX, CSV, JSON, HTML, TXT, MD)
+- **💾 Client-side Storage**: Conversations persist in browser storage via IndexedDB (using localForage), with automatic migration from any existing localStorage data
 - **⚙️ Smart Defaults**: Model selection and markdown preferences saved automatically
 - **🔒 Security First**: Content Security Policy, input validation, sanitization
 - **📊 Stateless**: Zero server-side memory, horizontally scalable
@@ -85,6 +86,9 @@ docker run -d \
 | `OPENAI_IMAGE_MODEL` | `dall-e-3` | OpenAI image model |
 | `OPENAI_IMAGE_SIZE` | `1024x1024` | OpenAI image size |
 | `MAX_IMAGE_SIZE_MB` | `10` | Maximum upload image size in MB |
+| `MAX_IMAGES_IN_CONTEXT` | `1` | Max images sent to VLM in conversation context |
+| `MAX_DOCUMENT_SIZE_MB` | `10` | Maximum upload document size in MB |
+| `MAX_DOCUMENTS_IN_CONTEXT` | `1` | Max documents sent to LLM in conversation context |
 | `RLM_TIMEOUT` | `60` | RLM execution timeout (seconds) |
 | `MAX_CONCURRENT_RLM` | `3` | Maximum parallel RLM executions |
 | `RLM_PASSCODE` | *(empty)* | Passcode required to enable RLM (⚠️ **highly recommended**) |
@@ -175,6 +179,47 @@ TinyChat supports uploading images to vision-capable language models for analysi
 
 **Note**: If you upload an image to a non-vision model, TinyChat will automatically detect the error and remove the image from the conversation, allowing you to continue chatting without it.
 
+### Document Upload and Parsing
+
+TinyChat can parse and process documents in multiple formats, making them available as context for your conversations.
+
+**Supported Formats**:
+- **PDF** (.pdf) - Text extraction with page-by-page parsing
+- **Word** (.docx) - Full paragraph and table extraction
+- **Excel** (.xlsx) - Sheet-by-sheet table conversion
+- **PowerPoint** (.pptx) - Slide content with notes
+- **CSV** (.csv) - Structured data parsing
+- **JSON** (.json) - Formatted JSON display
+- **HTML** (.html) - Clean text extraction and markdown conversion
+- **Text** (.txt) - Direct content reading
+- **Markdown** (.md) - Direct content reading
+
+**Usage**:
+- **Drag & Drop**: Drag a document anywhere in the conversation window
+- **Attach Button**: Click the 📎 (paperclip) icon next to the message input
+- **File Selection**: Choose a supported document format (max 10MB)
+
+**Features**:
+- Documents are automatically parsed to markdown format
+- Parsed content is included in conversation context for the LLM
+- By default, only the most recent document is kept in context (configurable)
+- Documents are stored locally in your browser using IndexedDB
+- Expand/collapse view to see parsed content with syntax highlighting
+- Document metadata display (filename, page count, file size)
+- Works in both standard and RLM modes
+
+**Configuration**:
+```bash
+docker run -d \
+  --name tinychat \
+  -p 8000:8000 \
+  -e MAX_DOCUMENT_SIZE_MB=10 \
+  -e MAX_DOCUMENTS_IN_CONTEXT=1 \
+  -e OPENAI_API_URL=https://api.openai.com/v1 \
+  -e OPENAI_API_KEY=your-api-key \
+  jasonacox/tinychat:latest
+```
+
 ### Research Logging
 
 Enable conversation logging for research purposes:
@@ -211,6 +256,9 @@ source .venv/bin/activate
 python -m pip install -U pip
 pip install -r requirements.txt
 
+# Document parsing libraries (included in requirements.txt)
+# PyPDF2, python-docx, openpyxl, python-pptx, beautifulsoup4, markdownify
+
 # (Optional) Install RLM for Recursive Language Model Support
 # Copy RLM and install it
 COPY rlm/ ./rlm/
@@ -240,6 +288,22 @@ The `local.sh` script includes several helpful commands:
 ./local.sh cleanup       # Clean up test artifacts
 ./local.sh help          # Show all commands
 ```
+
+### Updating Frontend Libraries
+
+TinyChat includes local copies of frontend libraries (Marked.js, Highlight.js, KaTeX, LocalForage). To update them:
+
+```bash
+./update-libs.sh
+```
+
+This script:
+- Downloads the latest versions of all frontend libraries
+- Creates a timestamped backup of the current libraries
+- Reports the new version numbers
+- Provides rollback instructions if needed
+
+After updating, test thoroughly and update [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md) with new version numbers.
 
 ### Building from Source
 
@@ -492,6 +556,30 @@ Contributions welcome! Please:
 - **RLM Integration**: [Recursive Language Models](https://github.com/alexzhang13/rlm) - Agentic reasoning framework by Alex L. Zhang, Tim Kraska, and Omar Khattab ([arXiv:2512.24601](https://arxiv.org/abs/2512.24601))
 - **Built with**: [Claude](https://claude.ai) - AI pair programming assistant
 - **Author**: Jason A. Cox ([@jasonacox](https://github.com/jasonacox))
+
+### Third-Party Libraries
+
+TinyChat is built with excellent open-source libraries:
+
+**Frontend:**
+- [Marked.js](https://github.com/markedjs/marked) (MIT) - Markdown rendering
+- [Highlight.js](https://github.com/highlightjs/highlight.js) (BSD-3-Clause) - Syntax highlighting
+- [KaTeX](https://github.com/KaTeX/KaTeX) (MIT) - Math equation rendering
+- [LocalForage](https://github.com/localForage/localForage) (Apache-2.0) - IndexedDB wrapper
+
+**Backend:**
+- [FastAPI](https://github.com/tiangolo/fastapi) (MIT) - Web framework
+- [Uvicorn](https://github.com/encode/uvicorn) (BSD-3-Clause) - ASGI server
+- [httpx](https://github.com/encode/httpx) (BSD-3-Clause) - HTTP client
+- [Pydantic](https://github.com/pydantic/pydantic) (MIT) - Data validation
+- [PyPDF2](https://github.com/py-pdf/pypdf) (BSD-3-Clause) - PDF parsing
+- [python-docx](https://github.com/python-openxml/python-docx) (MIT) - Word document parsing
+- [openpyxl](https://github.com/chronossc/openpyxl) (MIT) - Excel parsing
+- [python-pptx](https://github.com/scanny/python-pptx) (MIT) - PowerPoint parsing
+- [beautifulsoup4](https://www.crummy.com/software/BeautifulSoup/) (MIT) - HTML parsing
+- [markdownify](https://github.com/matthewwithanm/python-markdownify) (MIT) - HTML to Markdown conversion
+
+See [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md) for complete license information.
 
 <img width="500" alt="image" src="https://github.com/user-attachments/assets/cd39f8e8-caf5-4789-8333-653bb5fd2ad0" />
 

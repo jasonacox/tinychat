@@ -21,12 +21,14 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 
+from app import __version__
 from app.config import Settings
 from app.middleware.security import setup_security_middleware, add_security_headers
 from app.utils.error_handlers import validation_exception_handler
 from app.api.v1.root import router as root_router
 from app.api.v1.chat import router as chat_router
 from app.api.v1.config import router as config_router
+from app.api.v1.documents import router as documents_router
 
 # Configure logging
 logging.basicConfig(
@@ -35,13 +37,25 @@ logging.basicConfig(
 )
 logger = logging.getLogger("tinychat")
 
+# Print startup banner
+logger.info("="*60)
+logger.info(f"TinyChat v{__version__}")
+logger.info("="*60)
+
 # Create FastAPI app
 app = FastAPI(
     title="TinyChat",
     description="A minimal chatbot interface",
+    version=__version__,
     docs_url=None if not Settings.ENABLE_DEBUG_LOGS else "/docs",
     redoc_url=None if not Settings.ENABLE_DEBUG_LOGS else "/redoc"
 )
+
+@app.on_event("startup")
+async def startup_event():
+    """Run on application startup."""
+    logger.info(f"🚀 TinyChat v{__version__} is ready!")
+    logger.info(f"📡 Server running...")
 
 # Setup security middleware
 setup_security_middleware(app)
@@ -58,6 +72,7 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.include_router(root_router)
 app.include_router(chat_router)
 app.include_router(config_router)
+app.include_router(documents_router)
 
 # Mount static files
 static_dir = "static" if os.path.exists("static") else "app/static"

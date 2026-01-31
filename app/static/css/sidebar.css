@@ -111,3 +111,34 @@
 .delete-btn:hover {
     background: #c82333;
 }
+
+.sidebar-footer {
+    padding: 12px;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.sidebar-footer-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.export-btn, .import-btn {
+    flex: 1;
+    padding: 10px;
+    background: #f8f9fa;
+    color: #495057;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.export-btn:hover, .import-btn:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+}

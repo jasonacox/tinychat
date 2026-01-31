@@ -10,49 +10,59 @@ const SESSION_ID_KEY = 'tinychat_session_id';
 
 // Global state
 let appConfig = null;
-let sessionId = localStorage.getItem(SESSION_ID_KEY);
+let sessionId = null;
+
+// Initialize session ID (async)
+async function initSessionId() {
+    sessionId = await storageAdapter.getItem(SESSION_ID_KEY);
+    if (!sessionId) {
+        sessionId = generateUUID();
+        await storageAdapter.setItem(SESSION_ID_KEY, sessionId);
+    }
+    return sessionId;
+}
 
 // Get markdown preference
-function getMarkdownEnabled() {
-    const stored = localStorage.getItem(MARKDOWN_PREF_KEY);
-    return stored === null ? true : stored === 'true';  // Default to true
+async function getMarkdownEnabled() {
+    const stored = await storageAdapter.getItem(MARKDOWN_PREF_KEY);
+    return stored === null ? true : stored === true;  // Default to true
 }
 
 // Save markdown preference
-function setMarkdownEnabled(enabled) {
-    localStorage.setItem(MARKDOWN_PREF_KEY, enabled.toString());
+async function setMarkdownEnabled(enabled) {
+    await storageAdapter.setItem(MARKDOWN_PREF_KEY, enabled);
 }
 
 // Get saved model preference
-function getSavedModel() {
-    return localStorage.getItem(MODEL_PREF_KEY);
+async function getSavedModel() {
+    return await storageAdapter.getItem(MODEL_PREF_KEY);
 }
 
 // Save model preference
-function saveModelPreference(model) {
-    localStorage.setItem(MODEL_PREF_KEY, model);
+async function saveModelPreference(model) {
+    await storageAdapter.setItem(MODEL_PREF_KEY, model);
 }
 
 // Get RLM enabled preference
-function getRlmEnabled() {
-    const stored = localStorage.getItem(RLM_ENABLED_KEY);
-    return stored === null ? false : stored === 'true';  // Default to false
+async function getRlmEnabled() {
+    const stored = await storageAdapter.getItem(RLM_ENABLED_KEY);
+    return stored === null ? false : stored === true;  // Default to false
 }
 
 // Save RLM enabled preference
-function setRlmEnabled(enabled) {
-    localStorage.setItem(RLM_ENABLED_KEY, enabled.toString());
+async function setRlmEnabled(enabled) {
+    await storageAdapter.setItem(RLM_ENABLED_KEY, enabled);
 }
 
 // Get RLM thinking enabled preference
-function getRlmThinkingEnabled() {
-    const stored = localStorage.getItem(RLM_THINKING_KEY);
-    return stored === null ? true : stored === 'true';  // Default to true
+async function getRlmThinkingEnabled() {
+    const stored = await storageAdapter.getItem(RLM_THINKING_KEY);
+    return stored === null ? true : stored === true;  // Default to true
 }
 
 // Save RLM thinking enabled preference
-function setRlmThinkingEnabled(enabled) {
-    localStorage.setItem(RLM_THINKING_KEY, enabled.toString());
+async function setRlmThinkingEnabled(enabled) {
+    await storageAdapter.setItem(RLM_THINKING_KEY, enabled);
 }
 
 // Load configuration from server
@@ -65,7 +75,7 @@ async function loadConfiguration() {
         const modelSelect = document.getElementById('model');
         modelSelect.innerHTML = '';
         
-        const savedModel = getSavedModel();
+        const savedModel = await getSavedModel();
         let modelToSelect = savedModel && appConfig.available_models.includes(savedModel) 
             ? savedModel 
             : appConfig.default_model;
@@ -92,7 +102,7 @@ async function loadConfiguration() {
         }
         
         // Load conversations after config is ready
-        loadConversations();
+        await loadConversations();
         
         // Set focus to message input for better UX
         document.getElementById('messageInput').focus();

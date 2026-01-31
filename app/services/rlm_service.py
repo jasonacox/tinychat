@@ -28,7 +28,8 @@ class RLMService:
     async def stream_rlm_completion(
         messages: List[Dict],
         model: str,
-        show_thinking: bool = True
+        show_thinking: bool = True,
+        document_context: str = None
     ) -> AsyncGenerator[str, None]:
         """
         Stream RLM completion with code execution.
@@ -37,6 +38,7 @@ class RLMService:
             messages: Conversation history
             model: LLM model to use
             show_thinking: Whether to stream the thinking process
+            document_context: Optional document content to include in context
             
         Yields:
             SSE-formatted data chunks
@@ -66,7 +68,21 @@ class RLMService:
             verbose=False,
         )
         
-        rlm_query = messages[-1]["content"] if messages else ""
+        # Build query with document context if provided
+        user_prompt = messages[-1]["content"] if messages else ""
+        
+        if document_context:
+            rlm_query = f"""Consider the context below, and answer the prompt:
+
+<CONTEXT>
+{document_context}
+</CONTEXT>
+
+PROMPT:
+{user_prompt}"""
+        else:
+            rlm_query = user_prompt
+        
         message_queue = queue.Queue()  # Thread-safe queue
         thread_done = threading.Event()
         cancellation_requested = threading.Event()

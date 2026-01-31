@@ -1,36 +1,36 @@
-// localStorage management
+// IndexedDB storage management via localforage adapter
 
-// Local storage helper functions
-function getConversations() {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : {};
+// Local storage helper functions (now async)
+async function getConversations() {
+    const stored = await storageAdapter.getItem(STORAGE_KEY);
+    return stored || {};
 }
 
-function saveConversations(conversations) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
+async function saveConversations(conversations) {
+    await storageAdapter.setItem(STORAGE_KEY, conversations);
 }
 
-function getConversation(conversationId) {
-    const conversations = getConversations();
+async function getConversation(conversationId) {
+    const conversations = await getConversations();
     return conversations[conversationId] || null;
 }
 
-function saveConversation(conversationId, conversation) {
-    const conversations = getConversations();
+async function saveConversation(conversationId, conversation) {
+    const conversations = await getConversations();
     conversations[conversationId] = conversation;
     
     // Try to save
     try {
-        saveConversations(conversations);
+        await saveConversations(conversations);
     } catch (e) {
         if (e.name === 'QuotaExceededError') {
-            console.warn('localStorage quota exceeded. Attempting cleanup...');
+            console.warn('Storage quota exceeded. Attempting cleanup...');
             
             // Cleanup old images
             if (cleanupOldImages(conversations)) {
                 // Try again after cleanup
                 try {
-                    saveConversations(conversations);
+                    await saveConversations(conversations);
                 } catch (e2) {
                     showError('Storage full. Please delete some old conversations.');
                     throw e2;
@@ -80,38 +80,33 @@ function cleanupOldImages(conversations) {
 }
 
 /**
- * Get estimated localStorage usage.
+ * Get estimated storage usage using Storage API.
  */
-function getStorageUsage() {
-    let total = 0;
-    for (let key in localStorage) {
-        if (localStorage.hasOwnProperty(key)) {
-            total += localStorage[key].length + key.length;
-        }
-    }
-    // Convert to MB
-    return (total / 1024 / 1024).toFixed(2);
+async function getStorageUsage() {
+    const stats = await storageAdapter.getStorageStats();
+    return stats.usedMB;
 }
 
 /**
- * Get size of conversations in localStorage.
+ * Get size of conversations in storage.
  */
-function getConversationsSize() {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return 0;
+async function getConversationsSize() {
+    const conversations = await storageAdapter.getItem(STORAGE_KEY);
+    if (!conversations) return '0.00';
     // Size in MB
-    return (stored.length / 1024 / 1024).toFixed(2);
+    const sizeBytes = JSON.stringify(conversations).length;
+    return (sizeBytes / 1024 / 1024).toFixed(2);
 }
 
-function deleteConversation(conversationId) {
-    const conversations = getConversations();
+async function deleteConversation(conversationId) {
+    const conversations = await getConversations();
     delete conversations[conversationId];
-    saveConversations(conversations);
+    await saveConversations(conversations);
 }
 
-function deleteConversationById(conversationId) {
+async function deleteConversationById(conversationId) {
     if (confirm('Delete this conversation? This cannot be undone.')) {
-        deleteConversation(conversationId);
+        await deleteConversation(conversationId);
         
         // If deleted conversation was active, clear current
         if (currentConversationId === conversationId) {
@@ -120,12 +115,12 @@ function deleteConversationById(conversationId) {
         }
         
         // Reload conversation list
-        loadConversations();
+        await loadConversations();
     }
 }
 
-function clearAllConversations() {
-    const conversations = getConversations();
+async function clearAllConversations() {
+    const conversations = await getConversations();
     const count = Object.keys(conversations).length;
     
     if (count === 0) {
@@ -134,8 +129,8 @@ function clearAllConversations() {
     }
     
     if (confirm(`Delete all ${count} conversation${count > 1 ? 's' : ''}? This cannot be undone.`)) {
-        // Clear localStorage
-        localStorage.removeItem(STORAGE_KEY);
+        // Clear storage
+        await storageAdapter.removeItem(STORAGE_KEY);
         
         // Clear current conversation
         currentConversationId = null;
@@ -148,7 +143,7 @@ function clearAllConversations() {
         `;
         
         // Reload conversation list (will be empty)
-        loadConversations();
+        await loadConversations();
         
         showError('All conversations cleared');
     }

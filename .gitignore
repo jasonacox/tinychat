@@ -217,3 +217,5 @@ example.py
 PLAN.md
 app/main_old.py
 app/static/index_old.html
+INDEXEDDB_MIGRATION_PLAN.md
+MIGRATION_COMPLETE.md
