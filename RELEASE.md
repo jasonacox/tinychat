@@ -1,5 +1,36 @@
 # Release Notes
 
+## v0.3.2 - Security and UX Enhancements
+
+### Security
+- **XSS Prevention**: Integrated DOMPurify for HTML sanitization
+  - Protects against XSS attacks from uploaded documents (especially .md/.html files)
+  - Industry-standard sanitization applied to all rendered markdown
+  - Added DOMPurify 3.0.8 to local libraries
+
+### Features
+- **URL Model Selection**: Support for model selection via URL parameter
+  - Use `?model=<model_name>` to pre-select a model (e.g., `?model=nanochat`)
+  - URL parameter takes priority over saved preference
+  - Automatically saves URL-selected model for future visits
+  - Invalid models fall back to saved preference or default
+
+### Bug Fixes
+- **PDF Parsing**: Fixed AttributeError when PDFs contain non-extractable pages
+  - Added None-safety using `or ""` pattern for clean handling
+- **Conversation Export**: Changed success notification from error-style to info-style
+  - Now uses `showInfo()` instead of `showError()` for export success
+- **Conversation Creation**: Fixed race condition in new conversation creation
+  - Added `await` before `saveConversation()` to ensure persistence before UI refresh
+- **Import Validation**: Fixed conversation count display during import
+  - Now correctly reads from `data.data.tinychat_conversations` export format
+  - Previously always showed 0 conversations
+- **Code Cleanup**: Removed unused `Optional` import from document parser
+
+### Documentation
+- Updated THIRD-PARTY-LICENSES.md with DOMPurify license information
+- Updated README.md to include DOMPurify in frontend libraries list
+
 ## v0.3.1 - Document Upload and Parsing
 
 ### Major Features
