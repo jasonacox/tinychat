@@ -75,10 +75,23 @@ async function loadConfiguration() {
         const modelSelect = document.getElementById('model');
         modelSelect.innerHTML = '';
         
+        // Check for model override in URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlModel = urlParams.get('model');
+        
         const savedModel = await getSavedModel();
-        let modelToSelect = savedModel && appConfig.available_models.includes(savedModel) 
-            ? savedModel 
-            : appConfig.default_model;
+        let modelToSelect;
+        
+        // Priority: URL parameter > saved preference > default
+        if (urlModel && appConfig.available_models.includes(urlModel)) {
+            modelToSelect = urlModel;
+            // Save the URL model as preference for future visits
+            await saveModelPreference(urlModel);
+        } else if (savedModel && appConfig.available_models.includes(savedModel)) {
+            modelToSelect = savedModel;
+        } else {
+            modelToSelect = appConfig.default_model;
+        }
         
         appConfig.available_models.forEach(model => {
             const option = document.createElement('option');
