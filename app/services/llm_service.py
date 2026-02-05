@@ -3,7 +3,8 @@
 import json
 import logging
 import traceback
-from typing import Dict, List, AsyncGenerator
+import time
+from typing import Dict, List, AsyncGenerator, Optional, Tuple
 
 import httpx
 
@@ -11,9 +12,48 @@ from app.config import Settings
 
 logger = logging.getLogger("tinychat")
 
+# Health check cache (timestamp, result) - cached for 5 seconds
+_llm_health_cache: Optional[Tuple[float, bool]] = None
+
 
 class LLMService:
     """Service for interacting with LLM APIs."""
+    
+    @staticmethod
+    async def check_health() -> bool:
+        """
+        Check connectivity to the LLM backend.
+        Results are cached for 5 seconds to prevent DDoS.
+        
+        Returns:
+            bool: True if LLM backend is reachable and responding, False otherwise
+        """
+        global _llm_health_cache
+        
+        # Check cache
+        if _llm_health_cache is not None:
+            cache_time, cached_result = _llm_health_cache
+            if time.time() - cache_time < 5.0:
+                return cached_result
+        
+        # Perform health check
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(
+                    f"{Settings.OPENAI_API_URL.rstrip('/')}/models",
+                    headers={
+                        "Authorization": f"Bearer {Settings.OPENAI_API_KEY}",
+                        "Content-Type": "application/json"
+                    }
+                )
+                result = response.status_code == 200
+        except Exception as e:
+            logger.warning(f"LLM health check failed: {e}")
+            result = False
+        
+        # Update cache
+        _llm_health_cache = (time.time(), result)
+        return result
     
     @staticmethod
     def inject_document_context(messages: List[Dict], max_documents: int = None) -> List[Dict]:

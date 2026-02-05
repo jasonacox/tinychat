@@ -3,7 +3,8 @@
 import base64
 import io
 import logging
-from typing import Optional
+import time
+from typing import Optional, Tuple
 
 import aiohttp
 from PIL import Image
@@ -12,9 +13,58 @@ from app.config import Settings
 
 logger = logging.getLogger("tinychat")
 
+# Health check cache (timestamp, result) - cached for 5 seconds
+_image_health_cache: Optional[Tuple[float, bool]] = None
+
 
 class ImageService:
     """Service for generating images via SwarmUI or OpenAI."""
+    
+    @staticmethod
+    async def check_health() -> bool:
+        """
+        Check connectivity to the image generation backend.
+        Results are cached for 5 seconds to prevent DDoS.
+        
+        Returns:
+            bool: True if image backend is reachable and responding, False otherwise
+        """
+        global _image_health_cache
+        
+        # Check cache
+        if _image_health_cache is not None:
+            cache_time, cached_result = _image_health_cache
+            if time.time() - cache_time < 5.0:
+                return cached_result
+        
+        # Perform health check
+        try:
+            if Settings.IMAGE_PROVIDER == "swarmui":
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        f"{Settings.SWARMUI.rstrip('/')}/API/GetNewSession",
+                        timeout=aiohttp.ClientTimeout(total=5.0)
+                    ) as resp:
+                        result = resp.status == 200
+            elif Settings.IMAGE_PROVIDER == "openai":
+                # OpenAI image generation uses same API endpoint as LLM
+                # Check if we can reach the API
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(
+                        f"{Settings.OPENAI_API_URL.rstrip('/')}/models",
+                        headers={"Authorization": f"Bearer {Settings.OPENAI_API_KEY}"},
+                        timeout=aiohttp.ClientTimeout(total=5.0)
+                    ) as resp:
+                        result = resp.status == 200
+            else:
+                result = False
+        except Exception as e:
+            logger.warning(f"Image backend health check failed: {e}")
+            result = False
+        
+        # Update cache
+        _image_health_cache = (time.time(), result)
+        return result
     
     @staticmethod
     async def generate_image(prompt: str) -> dict:

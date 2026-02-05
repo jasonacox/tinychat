@@ -11,6 +11,8 @@ from app.api.schemas import RLMPasscodeRequest
 from app.config import Settings
 from app.utils.security import get_client_ip
 from app.utils.state import StateManager
+from app.services.llm_service import LLMService
+from app.services.image_service import ImageService
 
 logger = logging.getLogger("tinychat")
 
@@ -134,7 +136,8 @@ async def health_check():
     """
     Health check endpoint for monitoring and load balancers.
     
-    Returns basic service health status, active sessions, and concurrent generations.
+    Returns basic service health status, active sessions, concurrent generations,
+    and connectivity status for LLM and image backends.
     
     Returns:
         dict: Health status with:
@@ -142,13 +145,21 @@ async def health_check():
             - timestamp: Current timestamp
             - active_sessions: Number of sessions (page loads) in last 5 minutes
             - active_generations: Number of concurrent streaming generations
+            - llm: Boolean indicating LLM backend connectivity
+            - image: Boolean indicating image backend connectivity
     """
     active_sessions = await StateManager.get_active_sessions()
     active_gens = await StateManager.get_active_generations()
+    
+    # Check backend connectivity
+    llm_healthy = await LLMService.check_health()
+    image_healthy = await ImageService.check_health()
     
     return {
         "status": "healthy",
         "timestamp": datetime.now(),
         "active_sessions": active_sessions,
-        "active_generations": active_gens
+        "active_generations": active_gens,
+        "llm": llm_healthy,
+        "image": image_healthy
     }

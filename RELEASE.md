@@ -1,5 +1,27 @@
 # Release Notes
 
+## v0.3.3 - Health Check Enhancements
+
+### Features
+- **Enhanced Health Endpoint**: Added backend connectivity monitoring to `/api/health`
+  - `llm`: Boolean indicating LLM backend connectivity (tests `/models` endpoint)
+  - `image`: Boolean indicating image backend connectivity (SwarmUI or OpenAI)
+  - Both checks use 5-second timeouts for fast failure detection
+  - Results cached for 5 seconds to prevent DDoS through repeated health checks
+  - Useful for monitoring dashboards, load balancers, and operational alerts
+
+### Performance
+- **Health Check Caching**: 5-second cache on backend connectivity tests
+  - Prevents excessive load on backend services from monitoring tools
+  - Near-instant response for cached results
+  - Still fresh enough for meaningful health monitoring
+
+### Technical Details
+- LLM health check: Validates connectivity to OpenAI-compatible API via `/models` endpoint
+- Image health check: Tests SwarmUI `/API/GetNewSession` or OpenAI `/models` based on `IMAGE_PROVIDER` setting
+- Cache implementation using module-level variables with timestamp tracking
+- Non-blocking checks with proper error handling and logging
+
 ## v0.3.2 - Security and UX Enhancements
 
 ### Security
