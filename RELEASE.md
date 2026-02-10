@@ -1,5 +1,22 @@
 # Release Notes
 
+## v0.3.4 - Mobile UX Improvements
+
+### Features
+- **Model Name Display**: Chat messages now show the active model name (title-cased) instead of generic "Assistant" label
+- **Mobile Checkbox Layout**: "Render Markdown" and "Use RLM" checkboxes displayed side-by-side on mobile to save vertical space
+  - Uses `display: contents` on desktop for transparent wrapping
+  - Switches to `display: flex` on mobile (≤768px) for compact layout
+
+### Bug Fixes
+- **iOS Safari Viewport Fix**: Resolved issue where content scrolled behind the iPhone notch after button interactions
+  - Added `fixIOSViewport()` function to reset scroll position on iOS devices
+  - Wired to Send button, Enter key, touch events, and resize events
+  - Buttons now call `this.blur()` to release focus after click
+- **Dynamic Viewport Height**: Switched from `100vh` to `100dvh` for proper mobile viewport sizing
+  - Fixes input bar appearing below visible area on mobile Chrome
+  - Falls back to `100vh` on browsers without `dvh` support
+
 ## v0.3.3 - Health Check Enhancements
 
 ### Features

@@ -75,13 +75,15 @@
                         <option value="">Loading...</option>
                     </select>
                 </div>
-                <div class="setting-group">
-                    <input type="checkbox" id="markdownToggle" checked>
-                    <label for="markdownToggle">Render Markdown</label>
-                </div>
-                <div class="setting-group">
-                    <input type="checkbox" id="rlmToggle">
-                    <label for="rlmToggle">Use RLM</label>
+                <div class="checkbox-row">
+                    <div class="setting-group">
+                        <input type="checkbox" id="markdownToggle" checked>
+                        <label for="markdownToggle">Render Markdown</label>
+                    </div>
+                    <div class="setting-group">
+                        <input type="checkbox" id="rlmToggle">
+                        <label for="rlmToggle">Use RLM</label>
+                    </div>
                 </div>
                 <div class="setting-group" id="rlmThinkingGroup">
                     <input type="checkbox" id="rlmThinkingToggle" checked>
@@ -121,7 +123,7 @@
                 
                 <!-- Input row with attach button -->
                 <div class="input-row">
-                    <button class="attach-btn" onclick="document.getElementById('imageInput').click()" title="Attach image or document">
+                    <button class="attach-btn" onclick="document.getElementById('imageInput').click(); this.blur();" title="Attach image or document">
                         📎
                     </button>
                     <textarea 
@@ -130,7 +132,7 @@
                         placeholder="Type your message here..."
                         rows="1"
                     ></textarea>
-                    <button class="send-btn" id="sendBtn" onclick="sendMessage()">Send</button>
+                    <button class="send-btn" id="sendBtn" onclick="sendMessage(); this.blur();">Send</button>
                 </div>
             </div>
         </div>

@@ -1,5 +1,15 @@
 // Main app initialization and event listeners
 
+// Fix iOS Safari viewport scroll issue - Safari scrolls the page
+// when interacting with buttons, pushing content behind the notch
+function fixIOSViewport() {
+    if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+        window.scrollTo(0, 0);
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+    }
+}
+
 async function setupEventListeners() {
     const messageInput = document.getElementById('messageInput');
     const temperatureSlider = document.getElementById('temperature');
@@ -16,8 +26,19 @@ async function setupEventListeners() {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
+            fixIOSViewport();
         }
     });
+
+    // Fix iOS Safari viewport scroll on any touch interaction
+    if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+        document.addEventListener('touchend', () => {
+            setTimeout(fixIOSViewport, 100);
+        });
+        window.addEventListener('resize', () => {
+            setTimeout(fixIOSViewport, 100);
+        });
+    }
 
     // Update temperature display
     temperatureSlider.addEventListener('input', function() {

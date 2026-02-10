@@ -3,6 +3,16 @@
 let currentConversationId = null;
 let isStreaming = false;
 
+// Helper function to get current model name with title case formatting
+function getCurrentModelName() {
+    const modelSelect = document.getElementById('model');
+    if (!modelSelect || !modelSelect.value) return 'Assistant';
+    
+    // Convert to title case (first letter uppercase, rest lowercase)
+    const modelName = modelSelect.value;
+    return modelName.charAt(0).toUpperCase() + modelName.slice(1).toLowerCase();
+}
+
 async function sendMessage() {
     const input = document.getElementById('messageInput');
     const message = input.value.trim();
@@ -170,6 +180,8 @@ async function sendMessage() {
         document.getElementById('typing').style.display = 'none';
         await loadConversations();  // Refresh sidebar
         await updateStorageMeter();  // Update storage meter after saving
+        // Fix iOS Safari viewport scroll after streaming completes
+        if (typeof fixIOSViewport === 'function') fixIOSViewport();
     }
 }
 
@@ -361,7 +373,7 @@ async function addMessageToUI(role, content, timestamp, useMarkdown = false, fil
     
     const roleSpan = document.createElement('span');
     roleSpan.className = `message-role ${role}`;
-    roleSpan.textContent = role === 'user' ? 'You' : 'Assistant';
+    roleSpan.textContent = role === 'user' ? 'You' : getCurrentModelName();
     
     const timestampSpan = document.createElement('span');
     timestampSpan.className = 'message-timestamp';
