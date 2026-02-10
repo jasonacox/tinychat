@@ -4,9 +4,12 @@
 // when interacting with buttons, pushing content behind the notch
 function fixIOSViewport() {
     if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
-        window.scrollTo(0, 0);
-        document.documentElement.scrollTop = 0;
-        document.body.scrollTop = 0;
+        // Only fix if actually scrolled - avoid unnecessary work
+        if (window.scrollY !== 0 || document.documentElement.scrollTop !== 0 || document.body.scrollTop !== 0) {
+            window.scrollTo(0, 0);
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+        }
     }
 }
 

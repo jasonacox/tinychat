@@ -1,5 +1,21 @@
 # Release Notes
 
+## v0.3.5 - Model Display and Performance Fixes
+
+### Bug Fixes
+- **Model Name Persistence**: Fixed issue where historical messages showed current model instead of the model that generated them
+  - Model name now stored with each assistant message for accurate display
+  - Historical conversations correctly show which model generated each response
+  - Falls back to current model for legacy messages without stored model
+- **Model Name Formatting**: Fixed model name casing to preserve original formatting
+  - Uses dropdown's display text as-is (preserves "GPT-4", "Claude-3.5-Sonnet", etc.)
+  - Removed forced title-casing that mangled multi-word model names
+  - Consistent display between dropdown and message headers
+- **iOS Performance**: Optimized viewport fix to reduce unnecessary operations
+  - Added scroll detection guard in `fixIOSViewport()` function
+  - Only performs scroll reset when window is actually scrolled
+  - Prevents excessive DOM operations on every touch interaction
+
 ## v0.3.4 - Mobile UX Improvements
 
 ### Features
