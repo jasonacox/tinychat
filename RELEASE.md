@@ -11,6 +11,10 @@
   - Uses dropdown's display text as-is (preserves "GPT-4", "Claude-3.5-Sonnet", etc.)
   - Removed forced title-casing that mangled multi-word model names
   - Consistent display between dropdown and message headers
+- **Send Button State Management**: Fixed race condition where messages could be sent before models loaded
+  - Send button now disabled on page load until configuration completes
+  - Added safety check to prevent sending with empty model
+  - Falls back to default model if selected model is unavailable
 - **iOS Performance**: Optimized viewport fix to reduce unnecessary operations
   - Added scroll detection guard in `fixIOSViewport()` function
   - Only performs scroll reset when window is actually scrolled

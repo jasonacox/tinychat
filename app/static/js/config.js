@@ -114,6 +114,9 @@ async function loadConfiguration() {
             document.getElementById('version').textContent = appConfig.version;
         }
         
+        // Enable send button now that models are loaded
+        document.getElementById('sendBtn').disabled = false;
+        
         // Load conversations after config is ready
         await loadConversations();
         

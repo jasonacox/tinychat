@@ -28,8 +28,20 @@ async function sendMessage() {
     if ((!message && !hasAttachedFile()) || isStreaming) return;
     
     const temperature = parseFloat(document.getElementById('temperature').value);
-    const model = document.getElementById('model').value;
-    const selectedModelName = String(model || ''); // Ensure it's a string for storage
+    const modelSelect = document.getElementById('model');
+    let model = modelSelect ? modelSelect.value : '';
+    
+    // Safety check: If model is empty (e.g., config not loaded), use default or prevent send
+    if (!model) {
+        if (window.appConfig && appConfig.default_model) {
+            model = appConfig.default_model;
+        } else {
+            // Models not ready and no configured default; do not send
+            return;
+        }
+    }
+    
+    const selectedModelName = String(model); // Store the actual model used
     const rlm = document.getElementById('rlmToggle').checked;
     const show_rlm_thinking = document.getElementById('rlmThinkingToggle').checked;
     
