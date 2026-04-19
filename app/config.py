@@ -33,7 +33,31 @@ class Settings:
     MAX_CONVERSATION_HISTORY: int = int(os.getenv("MAX_CONVERSATION_HISTORY", "50"))
     ENABLE_DEBUG_LOGS: bool = os.getenv("ENABLE_DEBUG_LOGS", "false").lower() == "true"
     ALLOWED_HOSTS: List[str] = os.getenv("ALLOWED_HOSTS", "*").split(",")
-    ALLOWED_ORIGINS: List[str] = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+    # CORS allowed origins.
+    # Default (ALLOWED_ORIGINS not set): ["*"] — permissive, matches original behavior,
+    #   preserves compatibility for existing installs.
+    # Recommended for production: set ALLOWED_ORIGINS to your domain(s) to restrict
+    #   cross-origin access and protect against session hijacking if auth is added.
+    #
+    # Examples:
+    #   ALLOWED_ORIGINS=https://chat.example.com
+    #   ALLOWED_ORIGINS=https://chat.example.com,https://app.example.com
+    _origins_env: str = os.getenv("ALLOWED_ORIGINS", "")
+    _parsed_origins: List[str] = (
+        [o.strip() for o in _origins_env.split(",") if o.strip()]
+        if _origins_env.strip()
+        else ["*"]
+    )
+    # Normalize: if "*" appears alongside explicit origins, treat as wildcard.
+    # Mixing wildcard with named origins is invalid per CORS spec when
+    # credentials are enabled.
+    if "*" in _parsed_origins and len(_parsed_origins) > 1:
+        logger.warning(
+            "⚠️  ALLOWED_ORIGINS contains '*' alongside explicit origins — "
+            "normalizing to wildcard-only. Remove '*' if you meant to restrict."
+        )
+        _parsed_origins = ["*"]
+    ALLOWED_ORIGINS: List[str] = _parsed_origins
     
     # Research/Logging Configuration
     CHAT_LOG: str = os.getenv("CHAT_LOG", "")
