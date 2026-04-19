@@ -32,7 +32,7 @@ class Settings:
     MAX_MESSAGE_LENGTH: int = int(os.getenv("MAX_MESSAGE_LENGTH", "262144"))
     MAX_CONVERSATION_HISTORY: int = int(os.getenv("MAX_CONVERSATION_HISTORY", "50"))
     # Allow clients to send system-role messages.
-    # Default: False (strip system/developer messages for security).
+    # Default: False (strip system messages for security).
     # Set to True only in trusted/local deployments where users are known.
     ALLOW_SYSTEM_MESSAGES: bool = os.getenv("ALLOW_SYSTEM_MESSAGES", "false").lower() == "true"
     ENABLE_DEBUG_LOGS: bool = os.getenv("ENABLE_DEBUG_LOGS", "false").lower() == "true"
@@ -158,7 +158,7 @@ class Settings:
         if cls.ALLOW_SYSTEM_MESSAGES:
             logger.warning(f"  ⚠️  Security: ALLOW_SYSTEM_MESSAGES=true — clients can inject system prompts")
         else:
-            logger.info(f"  Security: System messages from clients stripped ✓")
+            logger.info(f"  Security: Client system messages stripped ✓")
         
         if cls.HAS_RLM:
             logger.info(f"  RLM: Enabled (timeout={cls.RLM_TIMEOUT}s, max_concurrent={cls.MAX_CONCURRENT_RLM})")

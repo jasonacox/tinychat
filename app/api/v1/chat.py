@@ -51,21 +51,30 @@ async def chat_stream(request: Request, chat_request: ChatRequest = None):
     logger.debug(f"  Model: {model_to_use} (requested: {chat_request.model or 'default'})")
     logger.debug(f"  Temperature: {temp_to_use}")
 
-    # SECURITY: Strip client-injected system/developer role messages.
+    # SECURITY: Strip client-injected system role messages.
     # These can be used to override model behavior or extract training data.
     # Server-side system prompts (if any) are injected later in the pipeline,
     # so stripping here only affects client-supplied messages.
+    # NOTE: If additional roles (e.g., 'developer') are added to the request
+    # schema in the future, add them to restricted_roles below.
     if not Settings.ALLOW_SYSTEM_MESSAGES:
-        restricted_roles = {"system", "developer"}
+        restricted_roles = {"system"}
         stripped = [m for m in chat_request.messages if m.get("role") in restricted_roles]
         if stripped:
             logger.warning(
-                f"⚠️  Stripped {len(stripped)} system/developer message(s) from {client_ip} — "
+                f"⚠️  Stripped {len(stripped)} system message(s) from {client_ip} — "
                 f"ALLOW_SYSTEM_MESSAGES=false"
             )
             chat_request.messages = [
                 m for m in chat_request.messages if m.get("role") not in restricted_roles
             ]
+            # If all messages were system messages, reject the request
+            if not chat_request.messages:
+                logger.warning(f"Rejected request from {client_ip}: all messages were system role")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Request contained only system messages. Include at least one user or assistant message."
+                )
     
     # Validate API key
     if not Settings.OPENAI_API_KEY:
