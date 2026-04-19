@@ -14,13 +14,16 @@ def setup_security_middleware(app):
     if Settings.ALLOWED_HOSTS != ["*"]:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=Settings.ALLOWED_HOSTS)
     
-    # Add CORS middleware
+    # CORS: behavior depends on whether ALLOWED_ORIGINS is explicitly configured.
+    # - Not set (default): allow_origins=["*"] preserves compatibility with existing installs.
+    # - Set via env var: restrict to listed origins and disable credentials on wildcard.
+    cors_restricted = Settings.ALLOWED_ORIGINS != ["*"]
     app.add_middleware(
         CORSMiddleware,
         allow_origins=Settings.ALLOWED_ORIGINS,
-        # SECURITY: allow_credentials=False by default. Enable only if cookie-based
-        # auth is required and origins are explicitly restricted (not wildcard).
-        allow_credentials=False,
+        # allow_credentials requires explicit origins (not wildcard) per CORS spec.
+        # Only enable when origins are restricted.
+        allow_credentials=cors_restricted,
         allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["*"],
     )
