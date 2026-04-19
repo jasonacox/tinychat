@@ -23,7 +23,7 @@ router = APIRouter()
 
 @router.post("/api/chat/stream")
 @limiter.limit(RATE_LIMIT)
-async def chat_stream(http_request: Request, request: ChatRequest = None):
+async def chat_stream(request: Request, chat_request: ChatRequest = None):
     """
     Stream chat completions via Server-Sent Events (stateless endpoint).
     
@@ -32,8 +32,8 @@ async def chat_stream(http_request: Request, request: ChatRequest = None):
     The server is stateless - all conversation state is managed client-side.
     
     Args:
-        request: ChatRequest with messages array, optional temperature and model
-        http_request: The HTTP request context for logging
+        request: The HTTP request context (required by slowapi rate limiter)
+        chat_request: ChatRequest with messages array, optional temperature and model
         
     Returns:
         StreamingResponse: SSE stream of response chunks
@@ -41,14 +41,14 @@ async def chat_stream(http_request: Request, request: ChatRequest = None):
     Raises:
         HTTPException: 500 if API key is not configured
     """
-    client_ip = get_client_ip(http_request)
+    client_ip = get_client_ip(request)
     
     # Determine which model will be used
-    model_to_use = request.model or Settings.DEFAULT_MODEL
-    temp_to_use = request.temperature or Settings.DEFAULT_TEMPERATURE
+    model_to_use = chat_request.model or Settings.DEFAULT_MODEL
+    temp_to_use = chat_request.temperature or Settings.DEFAULT_TEMPERATURE
     
-    logger.debug(f"Chat stream request from {client_ip}: {len(request.messages)} messages")
-    logger.debug(f"  Model: {model_to_use} (requested: {request.model or 'default'})")
+    logger.debug(f"Chat stream request from {client_ip}: {len(chat_request.messages)} messages")
+    logger.debug(f"  Model: {model_to_use} (requested: {chat_request.model or 'default'})")
     logger.debug(f"  Temperature: {temp_to_use}")
     
     # Validate API key
@@ -57,11 +57,11 @@ async def chat_stream(http_request: Request, request: ChatRequest = None):
         raise HTTPException(status_code=500, detail="API key not configured")
     
     # Track session if provided
-    if request.session_id:
-        await StateManager.track_session(request.session_id)
+    if chat_request.session_id:
+        await StateManager.track_session(chat_request.session_id)
     
     # Check if this is an image generation request
-    last_message = request.messages[-1]["content"] if request.messages else ""
+    last_message = chat_request.messages[-1]["content"] if chat_request.messages else ""
     last_message_lower = last_message.strip().lower()
     is_image_request = last_message_lower.startswith("@image") or last_message_lower.startswith("/image")
     
@@ -97,7 +97,7 @@ async def chat_stream(http_request: Request, request: ChatRequest = None):
                     
                     # Log conversation
                     LoggingService.log_conversation(
-                        request.messages, 
+                        chat_request.messages, 
                         f"[Generated image: {image_prompt}]", 
                         "image-gen", 
                         0.0
@@ -119,7 +119,7 @@ async def chat_stream(http_request: Request, request: ChatRequest = None):
         )
     
     # Handle RLM requests
-    if request.rlm:
+    if chat_request.rlm:
         if not Settings.HAS_RLM:
             async def rlm_missing_gen():
                 yield f"data: {json.dumps({'error': 'RLM module not installed. Please rebuild the container with RLM support.'})}\n\n"
@@ -127,13 +127,13 @@ async def chat_stream(http_request: Request, request: ChatRequest = None):
         
         # SECURITY: Validate RLM passcode on backend
         if Settings.RLM_PASSCODE:
-            if not request.rlm_passcode:
+            if not chat_request.rlm_passcode:
                 logger.warning(f"🚫 RLM request without passcode from {client_ip}")
                 async def rlm_auth_error_gen():
                     yield f"data: {json.dumps({'error': 'RLM access requires authentication. Please enable RLM through the web interface.'})}\n\n"
                 return StreamingResponse(rlm_auth_error_gen(), media_type="text/event-stream")
             
-            if request.rlm_passcode != Settings.RLM_PASSCODE:
+            if chat_request.rlm_passcode != Settings.RLM_PASSCODE:
                 logger.warning(f"🚫 RLM request with INVALID passcode from {client_ip}")
                 async def rlm_invalid_passcode_gen():
                     yield f"data: {json.dumps({'error': 'Invalid RLM passcode. Access denied.'})}\n\n"
@@ -159,7 +159,7 @@ async def chat_stream(http_request: Request, request: ChatRequest = None):
                 # Extract document context from most recent messages (limit by MAX_DOCUMENTS_IN_CONTEXT)
                 document_context = None
                 documents_found = 0
-                for msg in reversed(request.messages):
+                for msg in reversed(chat_request.messages):
                     if msg.get("document") and documents_found < Settings.MAX_DOCUMENTS_IN_CONTEXT:
                         doc = msg["document"]
                         if document_context is None:
@@ -171,9 +171,9 @@ async def chat_stream(http_request: Request, request: ChatRequest = None):
                 # Stream RLM completion
                 assistant_full_content = ""
                 async for chunk in RLMService.stream_rlm_completion(
-                    request.messages, 
+                    chat_request.messages, 
                     model_to_use,
-                    request.show_rlm_thinking,
+                    chat_request.show_rlm_thinking,
                     document_context
                 ):
                     yield chunk
@@ -188,7 +188,7 @@ async def chat_stream(http_request: Request, request: ChatRequest = None):
                 
                 # Log conversation
                 LoggingService.log_conversation(
-                    request.messages, 
+                    chat_request.messages, 
                     assistant_full_content, 
                     f"{model_to_use}-rlm", 
                     temp_to_use
@@ -212,7 +212,7 @@ async def chat_stream(http_request: Request, request: ChatRequest = None):
         
         try:
             # Inject document context for non-RLM mode
-            messages_with_docs = LLMService.inject_document_context(request.messages)
+            messages_with_docs = LLMService.inject_document_context(chat_request.messages)
             
             assistant_full_content = ""
             async for chunk in LLMService.stream_completion(
@@ -232,7 +232,7 @@ async def chat_stream(http_request: Request, request: ChatRequest = None):
             
             # Log conversation
             LoggingService.log_conversation(
-                request.messages, 
+                chat_request.messages, 
                 assistant_full_content, 
                 model_to_use, 
                 temp_to_use

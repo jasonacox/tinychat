@@ -38,6 +38,8 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger("tinychat")
+if Settings.ENABLE_DEBUG_LOGS:
+    logger.setLevel(logging.DEBUG)
 
 # Print startup banner
 logger.info("="*60)
