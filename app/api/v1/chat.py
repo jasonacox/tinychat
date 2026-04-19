@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from app.api.schemas import ChatRequest
-from app.rate_limiter import limiter
+from app.rate_limiter import limiter, RATE_LIMIT
 from app.config import Settings
 from app.services.llm_service import LLMService
 from app.services.rlm_service import RLMService
@@ -22,7 +22,7 @@ router = APIRouter()
 
 
 @router.post("/api/chat/stream")
-@limiter.limit("20/minute")
+@limiter.limit(RATE_LIMIT)
 async def chat_stream(http_request: Request, request: ChatRequest = None):
     """
     Stream chat completions via Server-Sent Events (stateless endpoint).
