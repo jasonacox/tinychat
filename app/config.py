@@ -33,11 +33,22 @@ class Settings:
     MAX_CONVERSATION_HISTORY: int = int(os.getenv("MAX_CONVERSATION_HISTORY", "50"))
     ENABLE_DEBUG_LOGS: bool = os.getenv("ENABLE_DEBUG_LOGS", "false").lower() == "true"
     ALLOWED_HOSTS: List[str] = os.getenv("ALLOWED_HOSTS", "*").split(",")
-    # SECURITY: Default origins restricted to localhost for local development.
-    # Set ALLOWED_ORIGINS env var to a comma-separated list of trusted origins
-    # (e.g. "https://chat.example.com,https://app.example.com").
-    # Using wildcard "*" with allow_credentials=True is insecure (CORS spec violation).
-    ALLOWED_ORIGINS: List[str] = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://localhost:3000").split(",")
+    # SECURITY: CORS allowed origins.
+    # Default: localhost only (safe for local development).
+    # Override with ALLOWED_ORIGINS env var — comma-separated list of trusted origins.
+    #
+    # Examples:
+    #   ALLOWED_ORIGINS=https://chat.example.com
+    #   ALLOWED_ORIGINS=https://chat.example.com,https://app.example.com
+    #
+    # Note: "*" (wildcard) is intentionally NOT supported here because combining
+    # a wildcard origin with allow_credentials=True violates the CORS spec and
+    # creates a session hijack risk. Use explicit origins for production deployments.
+    ALLOWED_ORIGINS: List[str] = [
+        o.strip()
+        for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://localhost:3000").split(",")
+        if o.strip() and o.strip() != "*"
+    ] or ["http://localhost:8000"]  # fallback if env var is set but empty/invalid
     
     # Research/Logging Configuration
     CHAT_LOG: str = os.getenv("CHAT_LOG", "")
