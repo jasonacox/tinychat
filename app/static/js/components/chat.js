@@ -33,7 +33,7 @@ async function sendMessage() {
     
     // Safety check: If model is empty (e.g., config not loaded), use default or prevent send
     if (!model) {
-        if (window.appConfig && appConfig.default_model) {
+        if (appConfig?.default_model) {
             model = appConfig.default_model;
         } else {
             // Models not ready and no configured default; do not send
