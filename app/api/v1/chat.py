@@ -5,6 +5,8 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.api.schemas import ChatRequest
 from app.config import Settings
@@ -18,9 +20,11 @@ from app.utils.state import StateManager
 logger = logging.getLogger("tinychat")
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("/api/chat/stream")
+@limiter.limit("20/minute")
 async def chat_stream(request: ChatRequest, http_request: Request):
     """
     Stream chat completions via Server-Sent Events (stateless endpoint).
