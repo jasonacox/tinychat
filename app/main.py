@@ -17,9 +17,11 @@ GitHub: https://github.com/jasonacox/tinychat
 import logging
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app import __version__
 from app.config import Settings
@@ -36,11 +38,18 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger("tinychat")
+if Settings.ENABLE_DEBUG_LOGS:
+    logger.setLevel(logging.DEBUG)
 
 # Print startup banner
 logger.info("="*60)
 logger.info(f"TinyChat v{__version__}")
 logger.info("="*60)
+
+# Rate limiter: shared instance (see app/rate_limiter.py)
+# 20 req/min per IP — prevents automated abuse of LLM endpoints
+# while allowing normal interactive use (~1 msg every 3s continuously)
+from app.rate_limiter import limiter
 
 # Create FastAPI app
 app = FastAPI(
@@ -50,6 +59,10 @@ app = FastAPI(
     docs_url=None if not Settings.ENABLE_DEBUG_LOGS else "/docs",
     redoc_url=None if not Settings.ENABLE_DEBUG_LOGS else "/redoc"
 )
+
+# Register rate limiter on app state and exception handler
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 @app.on_event("startup")
 async def startup_event():
