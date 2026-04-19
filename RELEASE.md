@@ -20,6 +20,16 @@
   - Only performs scroll reset when window is actually scrolled
   - Prevents excessive DOM operations on every touch interaction
 
+### Security
+- **Rate Limiting**: Added configurable rate limiting on `/api/chat/stream`
+  - Default: 20 requests/minute per client IP
+  - Proxy-aware: uses `X-Forwarded-For` header when behind a reverse proxy
+  - Configurable via `RATE_LIMIT` env var (e.g., `RATE_LIMIT=30/minute`)
+- **CORS Origin Restriction**: Added opt-in `ALLOWED_ORIGINS` env var
+  - Default: `*` (permissive, preserves backward compatibility)
+  - Set to your domain(s) for production (e.g., `ALLOWED_ORIGINS=https://chat.example.com`)
+  - Normalizes invalid mixed `*` + named origins with a startup warning
+
 ## v0.3.4 - Mobile UX Improvements
 
 ### Features
