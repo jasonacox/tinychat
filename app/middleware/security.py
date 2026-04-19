@@ -18,7 +18,9 @@ def setup_security_middleware(app):
     app.add_middleware(
         CORSMiddleware,
         allow_origins=Settings.ALLOWED_ORIGINS,
-        allow_credentials=True,
+        # SECURITY: allow_credentials=False by default. Enable only if cookie-based
+        # auth is required and origins are explicitly restricted (not wildcard).
+        allow_credentials=False,
         allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["*"],
     )

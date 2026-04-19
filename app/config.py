@@ -33,7 +33,11 @@ class Settings:
     MAX_CONVERSATION_HISTORY: int = int(os.getenv("MAX_CONVERSATION_HISTORY", "50"))
     ENABLE_DEBUG_LOGS: bool = os.getenv("ENABLE_DEBUG_LOGS", "false").lower() == "true"
     ALLOWED_HOSTS: List[str] = os.getenv("ALLOWED_HOSTS", "*").split(",")
-    ALLOWED_ORIGINS: List[str] = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+    # SECURITY: Default origins restricted to localhost for local development.
+    # Set ALLOWED_ORIGINS env var to a comma-separated list of trusted origins
+    # (e.g. "https://chat.example.com,https://app.example.com").
+    # Using wildcard "*" with allow_credentials=True is insecure (CORS spec violation).
+    ALLOWED_ORIGINS: List[str] = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://localhost:3000").split(",")
     
     # Research/Logging Configuration
     CHAT_LOG: str = os.getenv("CHAT_LOG", "")
