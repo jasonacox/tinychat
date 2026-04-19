@@ -43,11 +43,21 @@ class Settings:
     #   ALLOWED_ORIGINS=https://chat.example.com
     #   ALLOWED_ORIGINS=https://chat.example.com,https://app.example.com
     _origins_env: str = os.getenv("ALLOWED_ORIGINS", "")
-    ALLOWED_ORIGINS: List[str] = (
+    _parsed_origins: List[str] = (
         [o.strip() for o in _origins_env.split(",") if o.strip()]
         if _origins_env.strip()
         else ["*"]
     )
+    # Normalize: if "*" appears alongside explicit origins, treat as wildcard.
+    # Mixing wildcard with named origins is invalid per CORS spec when
+    # credentials are enabled.
+    if "*" in _parsed_origins and len(_parsed_origins) > 1:
+        logger.warning(
+            "⚠️  ALLOWED_ORIGINS contains '*' alongside explicit origins — "
+            "normalizing to wildcard-only. Remove '*' if you meant to restrict."
+        )
+        _parsed_origins = ["*"]
+    ALLOWED_ORIGINS: List[str] = _parsed_origins
     
     # Research/Logging Configuration
     CHAT_LOG: str = os.getenv("CHAT_LOG", "")
