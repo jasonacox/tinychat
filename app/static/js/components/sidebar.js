@@ -94,7 +94,8 @@ async function loadConversation(conversationId) {
                 message.content, 
                 message.timestamp, 
                 true,  // useMarkdown
-                null   // no fileData yet, we'll add it separately
+                null,  // no fileData yet, we'll add it separately
+                message.model  // pass stored model name
             );
             
             // Now add the image container with download button (same as during generation)
@@ -129,7 +130,8 @@ async function loadConversation(conversationId) {
                 message.content, 
                 message.timestamp, 
                 message.role === 'assistant',
-                fileData
+                fileData,
+                message.model  // pass stored model name
             );
         }
     }

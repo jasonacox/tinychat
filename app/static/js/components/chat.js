@@ -3,14 +3,21 @@
 let currentConversationId = null;
 let isStreaming = false;
 
-// Helper function to get current model name with title case formatting
-function getCurrentModelName() {
+// Helper function to get current model name for display
+function getCurrentModelName(model = null) {
+    // If a specific model is provided (from stored message), use it
+    if (model) return model;
+    
     const modelSelect = document.getElementById('model');
     if (!modelSelect || !modelSelect.value) return 'Assistant';
     
-    // Convert to title case (first letter uppercase, rest lowercase)
-    const modelName = modelSelect.value;
-    return modelName.charAt(0).toUpperCase() + modelName.slice(1).toLowerCase();
+    // Prefer the selected option's label as-is, fall back to the raw value
+    const selectedOption = modelSelect.options[modelSelect.selectedIndex];
+    const optionLabel = selectedOption && selectedOption.textContent
+        ? selectedOption.textContent.trim()
+        : '';
+    
+    return optionLabel || modelSelect.value;
 }
 
 async function sendMessage() {
@@ -21,7 +28,20 @@ async function sendMessage() {
     if ((!message && !hasAttachedFile()) || isStreaming) return;
     
     const temperature = parseFloat(document.getElementById('temperature').value);
-    const model = document.getElementById('model').value;
+    const modelSelect = document.getElementById('model');
+    let model = modelSelect ? modelSelect.value : '';
+    
+    // Safety check: If model is empty (e.g., config not loaded), use default or prevent send
+    if (!model) {
+        if (appConfig?.default_model) {
+            model = appConfig.default_model;
+        } else {
+            // Models not ready and no configured default; do not send
+            return;
+        }
+    }
+    
+    const selectedModelName = String(model); // Store the actual model used
     const rlm = document.getElementById('rlmToggle').checked;
     const show_rlm_thinking = document.getElementById('rlmThinkingToggle').checked;
     
@@ -170,7 +190,7 @@ async function sendMessage() {
             throw new Error(errText);
         }
         
-        await handleStreamResponse(response, conversation, markdownEnabled);
+        await handleStreamResponse(response, conversation, markdownEnabled, selectedModelName);
         
     } catch (error) {
         showError('Failed to send message: ' + error.message);
@@ -185,7 +205,7 @@ async function sendMessage() {
     }
 }
 
-async function handleStreamResponse(response, conversation, markdownEnabled) {
+async function handleStreamResponse(response, conversation, markdownEnabled, selectedModelName) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     
@@ -342,7 +362,8 @@ async function handleStreamResponse(response, conversation, markdownEnabled) {
             const assistantMessage = {
                 role: 'assistant',
                 content: assistantContent,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                model: selectedModelName  // Store which model generated this response
             };
             
             // If this response included an image, store it for display purposes
@@ -360,7 +381,7 @@ async function handleStreamResponse(response, conversation, markdownEnabled) {
     }
 }
 
-async function addMessageToUI(role, content, timestamp, useMarkdown = false, fileData = null) {
+async function addMessageToUI(role, content, timestamp, useMarkdown = false, fileData = null, model = null) {
     const container = document.getElementById('messages');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
@@ -373,7 +394,7 @@ async function addMessageToUI(role, content, timestamp, useMarkdown = false, fil
     
     const roleSpan = document.createElement('span');
     roleSpan.className = `message-role ${role}`;
-    roleSpan.textContent = role === 'user' ? 'You' : getCurrentModelName();
+    roleSpan.textContent = role === 'user' ? 'You' : getCurrentModelName(model);
     
     const timestampSpan = document.createElement('span');
     timestampSpan.className = 'message-timestamp';
