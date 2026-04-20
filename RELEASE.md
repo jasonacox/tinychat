@@ -2,6 +2,11 @@
 
 ## v0.3.5 - Model Display and Performance Fixes
 
+### Security
+- **System Role Injection Prevention**: Strip client-injected `system`-role messages server-side to prevent prompt injection attacks. Configurable via `ALLOW_SYSTEM_MESSAGES=true` for trusted deployments.
+- **Rate Limiting**: Added configurable rate limiting to prevent abuse.
+- **CORS Hardening**: Tightened CORS configuration for production deployments.
+
 ### Bug Fixes
 - **Model Name Persistence**: Fixed issue where historical messages showed current model instead of the model that generated them
   - Model name now stored with each assistant message for accurate display
