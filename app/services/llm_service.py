@@ -345,12 +345,10 @@ Answer the user's questions based on the above context."""
                     line_count = 0
                     async for line in response.aiter_lines():
                         line_count += 1
-                        logger.debug(f"Received line {line_count}: {line[:100]}...")
                         
                         if line.startswith("data: "):
                             data = line[6:]  # Remove "data: " prefix
                             if data == "[DONE]":
-                                logger.debug("Stream completed with [DONE]")
                                 break
                             
                             try:
@@ -359,7 +357,6 @@ Answer the user's questions based on the above context."""
                                     delta = chunk["choices"][0].get("delta", {})
                                     if "content" in delta:
                                         content = delta["content"]
-                                        logger.debug(f"Yielding content: {repr(content)}")
                                         yield f"data: {json.dumps({'content': content})}\n\n"
                             except json.JSONDecodeError as e:
                                 logger.warning(f"Failed to parse JSON chunk: {data} - Error: {e}")
