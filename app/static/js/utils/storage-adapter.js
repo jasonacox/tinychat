@@ -190,6 +190,7 @@ const storageAdapter = {
                 'tinychat_conversations',
                 'tinychat_markdown_enabled',
                 'tinychat_selected_model',
+                'tinychat_selected_backend',
                 'tinychat_rlm_enabled',
                 'tinychat_rlm_thinking_enabled',
                 'tinychat_session_id'

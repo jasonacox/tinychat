@@ -59,6 +59,14 @@ async function setupEventListeners() {
         }
     });
 
+    // Backend selection listener
+    const backendSelect = document.getElementById('backend');
+    backendSelect.addEventListener('change', async function() {
+        await saveBackendPreference(this.value);
+        // Refresh models for the newly selected backend
+        await populateModelsForBackend(this.value);
+    });
+
     // Model selection listener
     const modelSelect = document.getElementById('model');
     modelSelect.addEventListener('change', async function() {

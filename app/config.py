@@ -5,7 +5,7 @@ Centralizes all environment variable loading and validation.
 """
 import os
 import logging
-from typing import List
+from typing import Dict, List, Optional
 
 logger = logging.getLogger("tinychat")
 
@@ -115,25 +115,33 @@ class Settings:
     
     # Available models
     AVAILABLE_MODELS: List[str] = []
-    
+
+    # Multi-backend configuration
+    # Format: "name|url|key|models;name2|url2|key2|models2"
+    # Falls back to single OPENAI_API_URL/KEY if not set.
+    API_BACKENDS: List[Dict[str, any]] = []
+
     # RLM availability (set during initialization)
     HAS_RLM: bool = False
     
     @classmethod
     def initialize(cls):
         """Initialize and validate configuration."""
+        # Parse multi-backend configuration
+        cls._parse_backends()
+
         # Parse available models
         models_str = os.getenv("AVAILABLE_MODELS", f"{cls.DEFAULT_MODEL},gpt-3.5-turbo,gpt-4,gpt-4-turbo")
         cls.AVAILABLE_MODELS = list(dict.fromkeys([
             model.strip() for model in models_str.split(",") if model.strip()
         ]))
-        
+
         # Ensure DEFAULT_MODEL is in AVAILABLE_MODELS
         if cls.DEFAULT_MODEL not in cls.AVAILABLE_MODELS:
             logger.warning(f"⚠️  Configuration issue: DEFAULT_MODEL '{cls.DEFAULT_MODEL}' not in AVAILABLE_MODELS")
             logger.warning(f"   Adding '{cls.DEFAULT_MODEL}' to available models list")
             cls.AVAILABLE_MODELS.insert(0, cls.DEFAULT_MODEL)
-        
+
         # Check for RLM
         try:
             import rlm
@@ -141,8 +149,69 @@ class Settings:
             cls.HAS_RLM = True
         except (ImportError, AttributeError):
             cls.HAS_RLM = False
-        
+
         cls._log_configuration()
+
+    @classmethod
+    def _parse_backends(cls):
+        """
+        Parse the API_BACKENDS env var into a list of backend configs.
+
+        Format: "name|url|key|models;name2|url2|key2|models2"
+        Example: "Ollama|http://localhost:11434/v1|ollama|llama3,codellama;OpenRouter|https://openrouter.ai/api/v1|sk-xxx|claude-3,gpt-4"
+
+        Falls back to a single "default" backend built from OPENAI_API_URL/KEY
+        and AVAILABLE_MODELS if API_BACKENDS is not set.
+        """
+        backends_str = os.getenv("API_BACKENDS", "")
+        cls.API_BACKENDS = []
+
+        if backends_str.strip():
+            for entry in backends_str.split(";"):
+                entry = entry.strip()
+                if not entry:
+                    continue
+                parts = entry.split("|")
+                if len(parts) < 3:
+                    logger.warning(f"⚠️  Skipping malformed backend entry: '{entry}' (need at least name|url|key)")
+                    continue
+                name = parts[0].strip()
+                url = parts[1].strip()
+                key = parts[2].strip()
+                models_csv = parts[3].strip() if len(parts) > 3 else ""
+                models = [m.strip() for m in models_csv.split(",") if m.strip()] if models_csv else []
+                cls.API_BACKENDS.append({
+                    "name": name,
+                    "url": url,
+                    "key": key,
+                    "models": models,
+                })
+            if cls.API_BACKENDS:
+                logger.info(f"  Multi-backend: {len(cls.API_BACKENDS)} backend(s) configured")
+
+        # If no backends configured, build a default from the single-endpoint vars
+        if not cls.API_BACKENDS:
+            models_str = os.getenv("AVAILABLE_MODELS", f"{cls.DEFAULT_MODEL},gpt-3.5-turbo,gpt-4,gpt-4-turbo")
+            default_models = [m.strip() for m in models_str.split(",") if m.strip()]
+            cls.API_BACKENDS.append({
+                "name": "default",
+                "url": cls.OPENAI_API_URL,
+                "key": cls.OPENAI_API_KEY,
+                "models": default_models,
+            })
+
+    @classmethod
+    def get_backend(cls, name: Optional[str] = None) -> Optional[Dict]:
+        """
+        Get a backend config by name. Returns the first backend if name is
+        None or not found.
+        """
+        if not name:
+            return cls.API_BACKENDS[0] if cls.API_BACKENDS else None
+        for backend in cls.API_BACKENDS:
+            if backend["name"] == name:
+                return backend
+        return cls.API_BACKENDS[0] if cls.API_BACKENDS else None
     
     @classmethod
     def _log_configuration(cls):
@@ -152,6 +221,8 @@ class Settings:
         logger.info(f"  API Key: {'***' + cls.OPENAI_API_KEY[-4:] if cls.OPENAI_API_KEY else 'NOT SET'}")
         logger.info(f"  Default Model: {cls.DEFAULT_MODEL}")
         logger.info(f"  Available Models: {cls.AVAILABLE_MODELS}")
+        if len(cls.API_BACKENDS) > 1:
+            logger.info(f"  Backends: {', '.join(b['name'] for b in cls.API_BACKENDS)}")
         logger.info(f"  Default Temperature: {cls.DEFAULT_TEMPERATURE}")
         logger.info(f"  Security: Max message length {cls.MAX_MESSAGE_LENGTH}")
         logger.info(f"  Security: Max conversation history {cls.MAX_CONVERSATION_HISTORY}")
