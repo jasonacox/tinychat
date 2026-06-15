@@ -65,6 +65,17 @@ async function setupEventListeners() {
         await saveModelPreference(this.value);
     });
 
+    // System prompt preset listeners
+    const systemPromptSelect = document.getElementById('systemPromptSelect');
+    systemPromptSelect.addEventListener('change', async function() {
+        await systemPrompts.select(this.value);
+    });
+
+    const editPromptsBtn = document.getElementById('editPromptsBtn');
+    editPromptsBtn.addEventListener('click', function() {
+        systemPrompts.showEditModal();
+    });
+
     // RLM toggle listener - with passcode protection
     const rlmToggle = document.getElementById('rlmToggle');
     const rlmThinkingToggle = document.getElementById('rlmThinkingToggle');
@@ -162,7 +173,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // Initialize RLM security
     await rlmSecurity.initialize();
-    
+
+    // Initialize system prompt presets
+    await systemPrompts.initialize();
+
     // Track session for analytics
     try {
         const sessionResponse = await fetch('/api/session' + (sessionId ? `?session_id=${sessionId}` : ''));

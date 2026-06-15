@@ -7,6 +7,8 @@ const MODEL_PREF_KEY = 'tinychat_selected_model';
 const RLM_ENABLED_KEY = 'tinychat_rlm_enabled';
 const RLM_THINKING_KEY = 'tinychat_rlm_thinking_enabled';
 const SESSION_ID_KEY = 'tinychat_session_id';
+const SYSTEM_PROMPTS_KEY = 'tinychat_system_prompts';
+const SELECTED_PROMPT_KEY = 'tinychat_selected_prompt';
 
 // Global state
 let appConfig = null;

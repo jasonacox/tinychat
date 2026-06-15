@@ -75,6 +75,13 @@
                         <option value="">Loading...</option>
                     </select>
                 </div>
+                <div class="setting-group system-prompt-group">
+                    <label for="systemPromptSelect">System Prompt:</label>
+                    <select id="systemPromptSelect">
+                        <option value="default">Default</option>
+                    </select>
+                    <button class="edit-prompts-btn" id="editPromptsBtn" title="Manage presets">Edit</button>
+                </div>
                 <div class="checkbox-row">
                     <div class="setting-group">
                         <input type="checkbox" id="markdownToggle" checked>
@@ -146,6 +153,7 @@
     <script src="/static/js/utils/storage-adapter.js"></script>
     <script src="/static/js/config.js"></script>
     <script src="/static/js/utils/storage.js"></script>
+    <script src="/static/js/utils/system-prompts.js"></script>
     <script src="/static/js/utils/markdown.js"></script>
     <script src="/static/js/utils/file-upload.js"></script>
     <script src="/static/js/components/rlm-security.js"></script>
