@@ -13,24 +13,51 @@ function initializeFileHandlers() {
     const fileInput = document.getElementById('imageInput'); // Keep same ID for backward compatibility
     const inputContainer = document.querySelector('.input-container');
     const messagesArea = document.getElementById('messages');
-    
+    const messageInput = document.getElementById('messageInput');
+
     // File input change handler
     if (fileInput) {
         fileInput.addEventListener('change', handleFileSelect);
     }
-    
+
+    // Paste handler for clipboard images (Ctrl+V / Cmd+V)
+    if (messageInput) {
+        messageInput.addEventListener('paste', handlePaste);
+    }
+
     // Drag and drop handlers for input container
     if (inputContainer) {
         inputContainer.addEventListener('dragover', handleDragOver);
         inputContainer.addEventListener('dragleave', handleDragLeave);
         inputContainer.addEventListener('drop', handleDrop);
     }
-    
+
     // Drag and drop handlers for messages area (conversation thread)
     if (messagesArea) {
         messagesArea.addEventListener('dragover', handleDragOver);
         messagesArea.addEventListener('dragleave', handleDragLeave);
         messagesArea.addEventListener('drop', handleDrop);
+    }
+}
+
+/**
+ * Handle paste event to detect clipboard images.
+ * Supports Ctrl+V / Cmd+V with image data on clipboard.
+ */
+async function handlePaste(e) {
+    const clipboardData = e.clipboardData || window.clipboardData;
+    if (!clipboardData || !clipboardData.items) return;
+
+    // Look for image items in clipboard
+    for (const item of clipboardData.items) {
+        if (item.type.startsWith('image/')) {
+            e.preventDefault(); // Prevent pasting image as text
+            const file = item.getAsFile();
+            if (file) {
+                await processImageFile(file);
+            }
+            return; // Only handle first image
+        }
     }
 }
 
@@ -87,28 +114,33 @@ async function processImageFile(file) {
         showError('Please select a valid image file (JPEG, PNG, GIF, or WebP)');
         return;
     }
-    
+
     // Validate file size (max 10MB to avoid localStorage limits)
     const maxSize = 10 * 1024 * 1024; // 10MB
     if (file.size > maxSize) {
         showError('Image too large. Please select an image under 10MB.');
         return;
     }
-    
+
+    // Generate a display name (clipboard pastes often have generic names like "image.png")
+    const fileName = (file.name && file.name !== 'image.png' && file.name !== 'blob')
+        ? file.name
+        : `Pasted image (${file.type.split('/')[1]})`;
+
     // Convert to base64
     try {
         const base64 = await fileToBase64(file);
-        
-        // Compress/resize if needed
+
+        // Resize for vision (max 1024px on longest side)
         const compressed = await compressImageIfNeeded(base64, file.type);
-        
+
         attachedImage = {
             data: compressed,
             type: file.type,
-            fileName: file.name
+            fileName: fileName
         };
-        
-        showImagePreview(compressed, file.type, file.name);
+
+        showImagePreview(compressed, file.type, fileName);
     } catch (error) {
         console.error('Error processing image:', error);
         showError('Failed to process image. Please try again.');
@@ -132,59 +164,66 @@ function fileToBase64(file) {
 }
 
 /**
- * Compress image if it exceeds size threshold.
+ * Resize image for vision API (max 1024px on longest side).
+ * Always resizes to keep payloads reasonable for LLM vision endpoints.
  */
-async function compressImageIfNeeded(base64Data, mimeType) {
-    // If image is small enough, return as-is
-    const sizeInBytes = (base64Data.length * 3) / 4; // Approximate size
-    const maxSize = 5 * 1024 * 1024; // 5MB threshold for compression
-    
-    if (sizeInBytes < maxSize) {
-        console.log(`Image size OK: ${(sizeInBytes / 1024 / 1024).toFixed(2)}MB`);
-        return base64Data;
-    }
-    
-    console.log(`Compressing image: ${(sizeInBytes / 1024 / 1024).toFixed(2)}MB`);
-    
-    // Compress using canvas
+async function resizeImageForVision(base64Data, mimeType) {
+    const maxDimension = 1024;
+
     return new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
-            const canvas = document.createElement('canvas');
-            
-            // Calculate new dimensions (max 2048px on longest side)
             let width = img.width;
             let height = img.height;
-            const maxDimension = 2048;
-            
-            if (width > maxDimension || height > maxDimension) {
-                if (width > height) {
-                    height = (height * maxDimension) / width;
-                    width = maxDimension;
-                } else {
-                    width = (width * maxDimension) / height;
-                    height = maxDimension;
-                }
-                console.log(`Resizing from ${img.width}x${img.height} to ${Math.round(width)}x${Math.round(height)}`);
+
+            // Only resize if larger than max dimension
+            if (width <= maxDimension && height <= maxDimension) {
+                const sizeInBytes = (base64Data.length * 3) / 4;
+                console.log(`Image ${width}x${height} within limits (${(sizeInBytes / 1024).toFixed(0)}KB)`);
+                resolve(base64Data);
+                return;
             }
-            
+
+            // Scale down preserving aspect ratio
+            if (width > height) {
+                height = Math.round((height * maxDimension) / width);
+                width = maxDimension;
+            } else {
+                width = Math.round((width * maxDimension) / height);
+                height = maxDimension;
+            }
+
+            console.log(`Resizing from ${img.width}x${img.height} to ${width}x${height} for vision`);
+
+            const canvas = document.createElement('canvas');
             canvas.width = width;
             canvas.height = height;
-            
+
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
-            
-            // Convert back to base64 with compression
-            const compressedDataURL = canvas.toDataURL(mimeType, 0.85);
+
+            // Use JPEG for smaller size unless it's PNG with transparency
+            const outputType = (mimeType === 'image/png') ? 'image/png' : 'image/jpeg';
+            const quality = (outputType === 'image/jpeg') ? 0.85 : undefined;
+            const compressedDataURL = canvas.toDataURL(outputType, quality);
             const compressedBase64 = compressedDataURL.split(',')[1];
-            
+
             const newSize = (compressedBase64.length * 3) / 4;
-            console.log(`Compressed to: ${(newSize / 1024 / 1024).toFixed(2)}MB`);
-            
+            console.log(`Resized to ${width}x${height}: ${(newSize / 1024).toFixed(0)}KB`);
+
             resolve(compressedBase64);
         };
         img.src = `data:${mimeType};base64,${base64Data}`;
     });
+}
+
+/**
+ * Compress image if it exceeds size threshold.
+ * Also applies vision resize (max 1024px) to keep payloads manageable.
+ */
+async function compressImageIfNeeded(base64Data, mimeType) {
+    // Always resize for vision (max 1024px on longest side)
+    return resizeImageForVision(base64Data, mimeType);
 }
 
 /**

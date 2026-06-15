@@ -62,17 +62,47 @@ class ChatRequest(BaseModel):
     def validate_messages(cls, v):
         """
         Validate message structure and content.
-        
+
         Checks that each message has required fields, valid role,
         and content within length limits. Also validates optional image fields.
+
+        Content may be a string (plain text) or an array of content parts
+        (OpenAI multimodal format for vision), e.g.:
+        [{"type": "text", "text": "..."}, {"type": "image_url", "image_url": {"url": "data:..."}}]
         """
         for msg in v:
             if 'role' not in msg or 'content' not in msg:
                 raise ValueError("Each message must have 'role' and 'content'")
             if msg['role'] not in ['user', 'assistant', 'system']:
                 raise ValueError("Role must be 'user', 'assistant', or 'system'")
-            if len(msg['content']) > Settings.MAX_MESSAGE_LENGTH:
-                raise ValueError(f"Message content too long (max {Settings.MAX_MESSAGE_LENGTH})")
+
+            content = msg['content']
+
+            # Content can be a string or an array (OpenAI multimodal format)
+            if isinstance(content, str):
+                if len(content) > Settings.MAX_MESSAGE_LENGTH:
+                    raise ValueError(f"Message content too long (max {Settings.MAX_MESSAGE_LENGTH})")
+            elif isinstance(content, list):
+                # Validate multimodal content array
+                for part in content:
+                    if not isinstance(part, dict) or 'type' not in part:
+                        raise ValueError("Each content part must have a 'type' field")
+                    if part['type'] == 'text':
+                        if 'text' not in part:
+                            raise ValueError("Text content part must have a 'text' field")
+                        if len(part['text']) > Settings.MAX_MESSAGE_LENGTH:
+                            raise ValueError(f"Text content too long (max {Settings.MAX_MESSAGE_LENGTH})")
+                    elif part['type'] == 'image_url':
+                        if 'image_url' not in part or 'url' not in part['image_url']:
+                            raise ValueError("image_url content part must have 'image_url.url'")
+                        url = part['image_url']['url']
+                        # Accept data URIs (base64 images) and remote URLs
+                        if not (url.startswith('data:image/') or url.startswith('http://') or url.startswith('https://')):
+                            raise ValueError("image_url must be a data URI or HTTP(S) URL")
+                    else:
+                        raise ValueError(f"Unknown content part type: {part['type']}")
+            else:
+                raise ValueError("Message content must be a string or array of content parts")
             
             # Validate optional image fields
             if 'image' in msg:

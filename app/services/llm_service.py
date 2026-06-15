@@ -175,7 +175,7 @@ Answer the user's questions based on the above context."""
     def format_message_for_vision_api(message: Dict) -> Dict:
         """
         Format message with image for OpenAI-compatible vision APIs.
-        
+
         OpenAI vision format:
         {
             "role": "user",
@@ -184,26 +184,38 @@ Answer the user's questions based on the above context."""
                 {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}}
             ]
         }
-        
+
         This format works with:
         - OpenAI GPT-4 Vision models
         - Any OpenAI-compatible API that supports vision (LM Studio, Ollama, etc.)
-        
+
+        Handles three cases:
+        1. Content is already a multimodal array (pass through as-is)
+        2. Message has separate 'image' field (convert to array format)
+        3. Plain text message (return string content)
+
         Args:
-            message: Message dict with optional 'image' and 'image_type' fields
-            
+            message: Message dict with optional 'image' and 'image_type' fields.
+                     Content may be a string or already a multimodal array.
+
         Returns:
             Formatted message dict for API
         """
+        content = message.get("content", "")
+
+        # If content is already a multimodal array, pass through
+        if isinstance(content, list):
+            return {"role": message["role"], "content": content}
+
         if not message.get('image'):
             # No image, return as plain text message
-            return {"role": message["role"], "content": message["content"]}
-        
+            return {"role": message["role"], "content": content}
+
         # Format with image using OpenAI's content array format
         return {
             "role": message["role"],
             "content": [
-                {"type": "text", "text": message["content"]},
+                {"type": "text", "text": content},
                 {
                     "type": "image_url",
                     "image_url": {
