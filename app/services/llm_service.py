@@ -279,7 +279,8 @@ Answer the user's questions based on the above context."""
             "model": model,
             "messages": formatted_messages,
             "temperature": temperature,
-            "stream": True
+            "stream": True,
+            "stream_options": {"include_usage": True}
         }
         
         # Log the complete request details at DEBUG level
@@ -345,14 +346,20 @@ Answer the user's questions based on the above context."""
                     line_count = 0
                     async for line in response.aiter_lines():
                         line_count += 1
-                        
+
                         if line.startswith("data: "):
                             data = line[6:]  # Remove "data: " prefix
                             if data == "[DONE]":
                                 break
-                            
+
                             try:
                                 chunk = json.loads(data)
+
+                                # Check for usage data (sent as final chunk with stream_options)
+                                if "usage" in chunk and chunk["usage"]:
+                                    usage = chunk["usage"]
+                                    yield f"data: {json.dumps({'usage': usage})}\n\n"
+
                                 if "choices" in chunk and chunk["choices"]:
                                     delta = chunk["choices"][0].get("delta", {})
                                     if "content" in delta:
@@ -361,7 +368,7 @@ Answer the user's questions based on the above context."""
                             except json.JSONDecodeError as e:
                                 logger.warning(f"Failed to parse JSON chunk: {data} - Error: {e}")
                                 continue
-                    
+
                     logger.debug(f"Stream completed: {line_count} lines received")
                                 
         except httpx.HTTPStatusError as e:
