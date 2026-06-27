@@ -129,7 +129,7 @@ async function sendMessage() {
                 role: m.role,
                 content: m.content
             };
-            
+
             // Only include image data for the most recent N images
             if (imageIndices.includes(index)) {
                 // Include user-uploaded image data if present
@@ -151,15 +151,29 @@ async function sendMessage() {
                     }
                 }
             }
-            
+
             // Only include document data for the most recent N documents
             if (documentIndices.includes(index) && m.document) {
                 msg.document = m.document;
             }
-            
+
             return msg;
         });
-        
+
+        // Prepend system prompt if a preset is selected
+        const systemPromptContent = systemPrompts.getSelectedContent();
+        if (systemPromptContent && systemPrompts.selectedId !== 'none') {
+            // Trim oldest message if needed to stay within server max_conversation_history
+            const maxHistory = appConfig?.max_conversation_history || 50;
+            if (apiMessages.length >= maxHistory) {
+                apiMessages.pop();
+            }
+            apiMessages.unshift({
+                role: 'system',
+                content: systemPromptContent
+            });
+        }
+
         const response = await fetch('/api/chat/stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
