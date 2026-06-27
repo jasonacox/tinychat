@@ -5,7 +5,7 @@ Centralizes all environment variable loading and validation.
 """
 import os
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("tinychat")
 
@@ -119,7 +119,7 @@ class Settings:
     # Multi-backend configuration
     # Format: "name|url|key|models;name2|url2|key2|models2"
     # Falls back to single OPENAI_API_URL/KEY if not set.
-    API_BACKENDS: List[Dict[str, any]] = []
+    API_BACKENDS: List[Dict[str, Any]] = []
 
     # RLM availability (set during initialization)
     HAS_RLM: bool = False
@@ -203,15 +203,19 @@ class Settings:
     @classmethod
     def get_backend(cls, name: Optional[str] = None) -> Optional[Dict]:
         """
-        Get a backend config by name. Returns the first backend if name is
-        None or not found.
+        Get a backend config by name.
+
+        Returns the first backend when name is None (no preference).
+        Returns None when a specific name is requested but not found,
+        so the caller can reject explicitly instead of silently falling
+        back to the wrong backend.
         """
         if not name:
             return cls.API_BACKENDS[0] if cls.API_BACKENDS else None
         for backend in cls.API_BACKENDS:
             if backend["name"] == name:
                 return backend
-        return cls.API_BACKENDS[0] if cls.API_BACKENDS else None
+        return None  # explicit name not found — don't silently fall back
     
     @classmethod
     def _log_configuration(cls):

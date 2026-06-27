@@ -46,11 +46,21 @@ async def chat_stream(request: Request, chat_request: ChatRequest = None):
     # Resolve backend
     backend = Settings.get_backend(chat_request.backend)
     if not backend:
+        if chat_request.backend:
+            raise HTTPException(status_code=400, detail=f"Unknown backend: '{chat_request.backend}'")
         raise HTTPException(status_code=400, detail="No API backend configured")
 
     # Determine which model will be used
     model_to_use = chat_request.model or Settings.DEFAULT_MODEL
     temp_to_use = chat_request.temperature or Settings.DEFAULT_TEMPERATURE
+
+    # Soft model validation: warn if model isn't in the backend's list
+    # (not a hard rejection — some backends like Ollama accept unlisted models)
+    if backend.get("models") and model_to_use not in backend["models"]:
+        logger.warning(
+            f"⚠️  Model '{model_to_use}' not in backend '{backend['name']}' model list "
+            f"(available: {', '.join(backend['models'])})"
+        )
 
     logger.debug(f"Chat stream request from {client_ip}: {len(chat_request.messages)} messages")
     logger.debug(f"  Backend: {backend['name']}")

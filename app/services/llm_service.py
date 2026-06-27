@@ -293,7 +293,7 @@ Answer the user's questions based on the above context."""
         logger.debug(f"🚀 MAKING LLM API REQUEST")
         logger.debug(f"URL: {api_url}/chat/completions")
         logger.debug(f"Method: POST")
-        logger.debug(f"Headers: {json.dumps({k: (v if k != 'Authorization' else f'Bearer ***{v[-4:]}') for k, v in headers.items()}, indent=2)}")
+        logger.debug(f"Headers: {json.dumps({k: (v if k != 'Authorization' else ('Bearer ***' + v[-4:] if len(v) > 10 else 'Bearer ***')) for k, v in headers.items()}, indent=2)}")
         
         # Log payload but truncate base64 image data for readability
         debug_payload = json.loads(json.dumps(payload))
