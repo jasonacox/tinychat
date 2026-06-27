@@ -1,6 +1,6 @@
 // System Prompt Presets - CRUD operations and UI management
 
-// Built-in presets (cannot be deleted, but can be overridden)
+// Built-in presets (cannot be deleted or permanently modified)
 const BUILT_IN_PRESETS = [
     {
         id: 'default',
@@ -41,9 +41,9 @@ const systemPrompts = {
             this.presets = [...BUILT_IN_PRESETS];
         }
 
-        // Load selected preset
+        // Load selected preset, normalized to a valid id
         this.selectedId = await storageAdapter.getItem(SELECTED_PROMPT_KEY);
-        if (!this.selectedId) {
+        if (!this.selectedId || (this.selectedId !== 'none' && !this.getById(this.selectedId))) {
             this.selectedId = 'default';
         }
 
@@ -239,14 +239,13 @@ const systemPrompts = {
         modal.querySelector('.modal-close').onclick = () => this.closeEditModal();
         modal.querySelector('#addPresetBtn').onclick = () => this.showEditor(null);
 
-        // ESC to close
-        const handleEscape = (e) => {
+        // ESC to close — store handler so closeEditModal() can clean it up
+        this._escapeHandler = (e) => {
             if (e.key === 'Escape') {
                 this.closeEditModal();
-                document.removeEventListener('keydown', handleEscape);
             }
         };
-        document.addEventListener('keydown', handleEscape);
+        document.addEventListener('keydown', this._escapeHandler);
 
         this.renderPresetList();
     },
@@ -391,10 +390,14 @@ const systemPrompts = {
     },
 
     /**
-     * Close the edit modal
+     * Close the edit modal and clean up listeners
      */
     closeEditModal() {
         const modal = document.getElementById('systemPromptModal');
         if (modal) modal.remove();
+        if (this._escapeHandler) {
+            document.removeEventListener('keydown', this._escapeHandler);
+            this._escapeHandler = null;
+        }
     }
 };

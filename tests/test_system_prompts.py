@@ -1,7 +1,7 @@
 """Tests for system prompt presets and related API behavior."""
 
 import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 

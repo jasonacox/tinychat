@@ -163,6 +163,11 @@ async function sendMessage() {
         // Prepend system prompt if a preset is selected
         const systemPromptContent = systemPrompts.getSelectedContent();
         if (systemPromptContent && systemPrompts.selectedId !== 'none') {
+            // Trim oldest message if needed to stay within server max_conversation_history
+            const maxHistory = appConfig?.max_conversation_history || 50;
+            if (apiMessages.length >= maxHistory) {
+                apiMessages.pop();
+            }
             apiMessages.unshift({
                 role: 'system',
                 content: systemPromptContent

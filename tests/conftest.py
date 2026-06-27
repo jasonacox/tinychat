@@ -1,9 +1,7 @@
 """Shared test fixtures for TinyChat."""
 
 import os
-from unittest.mock import patch
 
-import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
