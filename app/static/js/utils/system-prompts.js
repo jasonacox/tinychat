@@ -285,11 +285,14 @@ const systemPrompts = {
             const actions = document.createElement('div');
             actions.className = 'preset-item-actions';
 
-            const editBtn = document.createElement('button');
-            editBtn.className = 'btn-edit';
-            editBtn.textContent = 'Edit';
-            editBtn.onclick = () => this.showEditor(preset.id);
-            actions.appendChild(editBtn);
+            // Only show Edit for custom presets (built-ins cannot be permanently modified)
+            if (!preset.builtIn) {
+                const editBtn = document.createElement('button');
+                editBtn.className = 'btn-edit';
+                editBtn.textContent = 'Edit';
+                editBtn.onclick = () => this.showEditor(preset.id);
+                actions.appendChild(editBtn);
+            }
 
             if (!preset.builtIn) {
                 const deleteBtn = document.createElement('button');
