@@ -134,12 +134,26 @@ Answer the user's questions based on the above context."""
         return modified
     
     @staticmethod
+    def _has_image(msg: Dict) -> bool:
+        """Check if a message contains an image (legacy field or multimodal array)."""
+        if msg.get('image'):
+            return True
+        content = msg.get('content')
+        if isinstance(content, list):
+            return any(
+                isinstance(p, dict) and p.get('type') == 'image_url'
+                for p in content
+            )
+        return False
+
+    @staticmethod
     def filter_images_keep_latest(messages: List[Dict]) -> List[Dict]:
         """
         Remove all images except the most recent one.
         
         This prevents API errors with LLMs that only support single images.
         Keeps the last user message with an image, removes all prior images.
+        Handles both legacy 'image' field and multimodal 'content' arrays.
         
         Args:
             messages: Full conversation history
@@ -147,10 +161,10 @@ Answer the user's questions based on the above context."""
         Returns:
             Filtered messages with only the most recent image
         """
-        # Find index of last message with image
+        # Find index of last message with image (legacy or multimodal)
         last_image_idx = None
         for i in range(len(messages) - 1, -1, -1):
-            if messages[i].get('image'):
+            if LLMService._has_image(messages[i]):
                 last_image_idx = i
                 break
         
@@ -161,21 +175,39 @@ Answer the user's questions based on the above context."""
         # Remove all images except the last one
         filtered = []
         for i, msg in enumerate(messages):
+            if i == last_image_idx:
+                filtered.append(msg)
+                continue
+
             msg_copy = msg.copy()
-            if msg_copy.get('image') and i != last_image_idx:
-                # Remove image from this message
+            if msg_copy.get('image'):
+                # Remove legacy image fields
                 msg_copy.pop('image', None)
                 msg_copy.pop('image_type', None)
+
+            content = msg_copy.get('content')
+            if isinstance(content, list):
+                # Remove image_url parts from multimodal content arrays
+                msg_copy['content'] = [
+                    p for p in content
+                    if not (isinstance(p, dict) and p.get('type') == 'image_url')
+                ]
+                # If only text parts remain, collapse back to string for efficiency
+                if len(msg_copy['content']) == 1 and msg_copy['content'][0].get('type') == 'text':
+                    msg_copy['content'] = msg_copy['content'][0].get('text', '')
+                elif len(msg_copy['content']) == 0:
+                    msg_copy['content'] = ''
+
             filtered.append(msg_copy)
         
-        logger.debug(f"Filtered images: kept image at index {last_image_idx}, removed {sum(1 for m in messages if m.get('image')) - 1} older images")
+        logger.debug(f"Filtered images: kept image at index {last_image_idx}, removed older images")
         return filtered
     
     @staticmethod
     def format_message_for_vision_api(message: Dict) -> Dict:
         """
         Format message with image for OpenAI-compatible vision APIs.
-        
+
         OpenAI vision format:
         {
             "role": "user",
@@ -184,26 +216,38 @@ Answer the user's questions based on the above context."""
                 {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}}
             ]
         }
-        
+
         This format works with:
         - OpenAI GPT-4 Vision models
         - Any OpenAI-compatible API that supports vision (LM Studio, Ollama, etc.)
-        
+
+        Handles three cases:
+        1. Content is already a multimodal array (pass through as-is)
+        2. Message has separate 'image' field (convert to array format)
+        3. Plain text message (return string content)
+
         Args:
-            message: Message dict with optional 'image' and 'image_type' fields
-            
+            message: Message dict with optional 'image' and 'image_type' fields.
+                     Content may be a string or already a multimodal array.
+
         Returns:
             Formatted message dict for API
         """
+        content = message.get("content", "")
+
+        # If content is already a multimodal array, pass through
+        if isinstance(content, list):
+            return {"role": message["role"], "content": content}
+
         if not message.get('image'):
             # No image, return as plain text message
-            return {"role": message["role"], "content": message["content"]}
-        
+            return {"role": message["role"], "content": content}
+
         # Format with image using OpenAI's content array format
         return {
             "role": message["role"],
             "content": [
-                {"type": "text", "text": message["content"]},
+                {"type": "text", "text": content},
                 {
                     "type": "image_url",
                     "image_url": {
@@ -215,28 +259,32 @@ Answer the user's questions based on the above context."""
     
     @staticmethod
     async def stream_completion(
-        messages: List[Dict], 
+        messages: List[Dict],
         temperature: float = None,
-        model: str = None
+        model: str = None,
+        api_url: str = None,
+        api_key: str = None,
     ) -> AsyncGenerator[str, None]:
         """
         Stream LLM response chunks from an OpenAI-compatible API.
-        
+
         Makes a streaming POST request to the configured LLM API endpoint
         and yields Server-Sent Events formatted chunks as they arrive.
         Handles image attachments for vision-capable models.
-        
+
         Args:
             messages: Full conversation history as list of message dicts
                      with 'role' and 'content' keys. May include optional
                      'image' and 'image_type' fields for vision requests.
             temperature: Sampling temperature (0.0-2.0), controls response randomness
             model: Name of the LLM model to use
-            
+            api_url: Override API base URL (for multi-backend support)
+            api_key: Override API key (for multi-backend support)
+
         Yields:
             str: SSE-formatted data chunks ("data: {json}\n\n")
                 containing either content deltas or error messages
-                
+
         Notes:
             - Handles streaming responses line-by-line
             - Logs detailed request/response information for debugging
@@ -247,6 +295,8 @@ Answer the user's questions based on the above context."""
         """
         temperature = temperature or Settings.DEFAULT_TEMPERATURE
         model = model or Settings.DEFAULT_MODEL
+        api_url = api_url or Settings.OPENAI_API_URL
+        api_key = api_key or Settings.OPENAI_API_KEY
         
         logger.debug(f"Streaming: {len(messages)} messages → model={model}, temp={temperature}")
         
@@ -271,7 +321,7 @@ Answer the user's questions based on the above context."""
         ]
         
         headers = {
-            "Authorization": f"Bearer {Settings.OPENAI_API_KEY}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
         
@@ -286,9 +336,9 @@ Answer the user's questions based on the above context."""
         # Log the complete request details at DEBUG level
         logger.debug("=" * 80)
         logger.debug(f"🚀 MAKING LLM API REQUEST")
-        logger.debug(f"URL: {Settings.OPENAI_API_URL}/chat/completions")
+        logger.debug(f"URL: {api_url}/chat/completions")
         logger.debug(f"Method: POST")
-        logger.debug(f"Headers: {json.dumps({k: v if k != 'Authorization' else f'Bearer ***{v[-4:]}' for k, v in headers.items()}, indent=2)}")
+        logger.debug(f"Headers: {json.dumps({k: (v if k != 'Authorization' else ('Bearer ***' + v[-4:] if len(v) > 10 else 'Bearer ***')) for k, v in headers.items()}, indent=2)}")
         
         # Log payload but truncate base64 image data for readability
         debug_payload = json.loads(json.dumps(payload))
@@ -306,11 +356,11 @@ Answer the user's questions based on the above context."""
         
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                logger.debug(f"Making request to {Settings.OPENAI_API_URL}/chat/completions")
+                logger.debug(f"Making request to {api_url}/chat/completions")
                 
                 async with client.stream(
                     "POST",
-                    f"{Settings.OPENAI_API_URL}/chat/completions",
+                    f"{api_url}/chat/completions",
                     headers=headers,
                     json=payload
                 ) as response:
