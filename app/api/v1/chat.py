@@ -86,7 +86,17 @@ async def chat_stream(request: Request, chat_request: ChatRequest = None):
         await StateManager.track_session(chat_request.session_id)
     
     # Check if this is an image generation request
-    last_message = chat_request.messages[-1]["content"] if chat_request.messages else ""
+    # Content may be a string or multimodal array — extract text for command detection
+    last_content = chat_request.messages[-1]["content"] if chat_request.messages else ""
+    if isinstance(last_content, list):
+        # Extract text from multimodal content array
+        last_message = ""
+        for part in last_content:
+            if isinstance(part, dict) and part.get("type") == "text":
+                last_message = part.get("text", "")
+                break
+    else:
+        last_message = last_content
     last_message_lower = last_message.strip().lower()
     is_image_request = last_message_lower.startswith("@image") or last_message_lower.startswith("/image")
     
