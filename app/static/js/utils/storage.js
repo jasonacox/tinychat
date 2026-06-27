@@ -112,6 +112,7 @@ async function deleteConversationById(conversationId) {
         if (currentConversationId === conversationId) {
             currentConversationId = null;
             document.getElementById('messages').innerHTML = '';
+            resetTokenTotal();
         }
         
         // Reload conversation list
@@ -134,6 +135,9 @@ async function clearAllConversations() {
         
         // Clear current conversation
         currentConversationId = null;
+        
+        // Reset token counter
+        resetTokenTotal();
         
         // Clear UI
         document.getElementById('messages').innerHTML = `
