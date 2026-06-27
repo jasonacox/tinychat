@@ -120,14 +120,31 @@ async function importConversations(event) {
             }
         }
 
+        // Sanitize imported conversations to prevent XSS via title or message content
+        const sanitized = {};
+        for (const [id, conv] of Object.entries(importedConversations)) {
+            sanitized[id] = sanitizeConversation(conv);
+        }
+
         // Perform the import
         if (mode === 'replace') {
             // Replace: clear existing and set imported
-            await saveConversations(importedConversations);
+            await saveConversations(sanitized);
         } else {
-            // Merge: combine existing with imported (imported wins on ID conflict)
-            const merged = { ...existingConversations, ...importedConversations };
+            // Merge: add only conversations that don't already exist (no silent overwrite)
+            const merged = { ...existingConversations };
+            let skipped = 0;
+            for (const [id, conv] of Object.entries(sanitized)) {
+                if (merged[id]) {
+                    skipped++;
+                } else {
+                    merged[id] = conv;
+                }
+            }
             await saveConversations(merged);
+            if (skipped > 0) {
+                showInfo(`Skipped ${skipped} conversation${skipped !== 1 ? 's' : ''} with existing IDs.`);
+            }
         }
 
         // Clear current conversation if it was replaced
@@ -153,18 +170,49 @@ async function importConversations(event) {
 }
 
 /**
+ * Sanitize a conversation object to prevent XSS when rendered in the DOM.
+ * Strips HTML/script tags from title and message content fields.
+ */
+function sanitizeConversation(conv) {
+    const sanitized = { ...conv };
+    if (sanitized.title) {
+        sanitized.title = stripHtml(sanitized.title);
+    }
+    if (Array.isArray(sanitized.messages)) {
+        sanitized.messages = sanitized.messages.map(msg => {
+            if (msg && typeof msg === 'object' && msg.content) {
+                return { ...msg, content: stripHtml(String(msg.content)) };
+            }
+            return msg;
+        });
+    }
+    return sanitized;
+}
+
+/**
+ * Remove HTML tags from a string to prevent XSS when inserted via innerHTML.
+ */
+function stripHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+/**
  * Validate imported data has the expected TinyChat export structure.
  * Returns an error message string if invalid, or null if valid.
  */
 function validateImportData(data) {
-    if (!data || typeof data !== 'object') {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
         return 'Invalid file: not a JSON object.';
     }
 
     // Check for the expected export format
-    if (!data.conversations || typeof data.conversations !== 'object') {
+    if (!data.conversations || typeof data.conversations !== 'object' || Array.isArray(data.conversations)) {
         // Also accept legacy format from storageAdapter.exportData()
-        if (data.data && data.data.tinychat_conversations) {
+        if (data.data && data.data.tinychat_conversations &&
+            typeof data.data.tinychat_conversations === 'object' &&
+            !Array.isArray(data.data.tinychat_conversations)) {
             // Migrate legacy format in-place
             data.conversations = data.data.tinychat_conversations;
             data.conversation_count = Object.keys(data.conversations).length;
@@ -172,7 +220,7 @@ function validateImportData(data) {
             data.export_date = data.exportDate || data.export_date || 'unknown';
             return null;
         }
-        return 'Invalid export file: missing "conversations" field. This does not appear to be a TinyChat export.';
+        return 'Invalid export file: missing or invalid "conversations" field. Expected an object map of conversations.';
     }
 
     // Validate conversation entries

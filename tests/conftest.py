@@ -9,14 +9,14 @@ from httpx import ASGITransport, AsyncClient
 # Ensure the project root is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Set working directory so static files can be found
-os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from app.main import app  # noqa: E402
 
 
 @pytest.fixture
-def client():
+async def client(monkeypatch):
     """Provide an async HTTP test client for the FastAPI app."""
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    monkeypatch.chdir(project_root)
     transport = ASGITransport(app=app)
-    return AsyncClient(transport=transport, base_url="http://testserver")
+    async with AsyncClient(transport=transport, base_url="http://testserver") as ac:
+        yield ac
