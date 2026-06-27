@@ -217,8 +217,8 @@ class Settings:
         # If no backends configured, build a default from the single-endpoint vars
         if not cls.API_BACKENDS:
             if not cls.OPENAI_API_URL.startswith("http://") and not cls.OPENAI_API_URL.startswith("https://"):
-                logger.error(
-                    f"❌ OPENAI_API_URL '{cls.OPENAI_API_URL}' is invalid — "
+                raise ValueError(
+                    f"OPENAI_API_URL '{cls.OPENAI_API_URL}' is invalid — "
                     "must start with http:// or https://"
                 )
             models_str = os.getenv("AVAILABLE_MODELS", f"{cls.DEFAULT_MODEL},gpt-3.5-turbo,gpt-4,gpt-4-turbo")

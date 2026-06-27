@@ -285,7 +285,8 @@ function showImportModeModal(importCount, existingCount) {
         document.body.appendChild(modal);
 
         function close(result) {
-            document.body.removeChild(modal);
+            document.removeEventListener('keydown', onKey);
+            if (modal.isConnected) modal.remove();
             resolve(result);
         }
 
@@ -296,10 +297,7 @@ function showImportModeModal(importCount, existingCount) {
 
         // ESC to cancel
         function onKey(e) {
-            if (e.key === 'Escape') {
-                document.removeEventListener('keydown', onKey);
-                close(null);
-            }
+            if (e.key === 'Escape') close(null);
         }
         document.addEventListener('keydown', onKey);
 
