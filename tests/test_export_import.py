@@ -11,7 +11,7 @@ Tests:
 import pytest
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_index_served(client):
     """GET / should return 200 with HTML content."""
     response = await client.get("/")
@@ -20,7 +20,7 @@ async def test_index_served(client):
     assert "<html" in response.text.lower()
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_config_endpoint_returns_valid_json(client):
     """GET /api/config should return JSON with expected keys."""
     response = await client.get("/api/config")
@@ -32,7 +32,7 @@ async def test_config_endpoint_returns_valid_json(client):
     assert isinstance(data["available_models"], list)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_html_contains_export_button(client):
     """The index page should include the export button."""
     response = await client.get("/")
@@ -41,7 +41,7 @@ async def test_html_contains_export_button(client):
     assert "exportConversations()" in response.text
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_html_contains_import_button(client):
     """The index page should include the import button and hidden file input."""
     response = await client.get("/")
@@ -51,7 +51,7 @@ async def test_html_contains_import_button(client):
     assert "importConversations(event)" in response.text
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_html_includes_export_import_script(client):
     """The index page should load the export-import JavaScript module."""
     response = await client.get("/")

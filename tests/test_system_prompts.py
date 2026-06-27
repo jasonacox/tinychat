@@ -6,7 +6,7 @@ from unittest.mock import patch
 import pytest
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_config_endpoint_returns_success(client):
     """GET /api/config should return 200 with expected configuration keys."""
     response = await client.get("/api/config")
@@ -19,7 +19,7 @@ async def test_config_endpoint_returns_success(client):
     assert "version" in data
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_config_endpoint_contains_model_list(client):
     """GET /api/config should include a non-empty list of available models."""
     response = await client.get("/api/config")
@@ -29,7 +29,7 @@ async def test_config_endpoint_contains_model_list(client):
     assert len(data["available_models"]) > 0
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_chat_stream_with_system_message(client):
     """POST /api/chat/stream with a system message prepended should stream successfully.
 
@@ -38,7 +38,7 @@ async def test_chat_stream_with_system_message(client):
     and return a streaming response.
     """
 
-    async def fake_stream(messages, temperature, model):
+    async def fake_stream(messages, temperature, model, **kwargs):
         """Simulate LLM streaming a single chunk."""
         yield f"data: {json.dumps({'content': 'Hello from the assistant'})}\n\n"
 
@@ -61,13 +61,15 @@ async def test_chat_stream_with_system_message(client):
     assert "Hello from the assistant" in body
 
 
-@pytest.mark.asyncio
-async def test_chat_stream_system_message_passed_to_llm(client):
+@pytest.mark.anyio
+async def test_chat_stream_system_message_passed_to_llm(client, monkeypatch):
     """The system message should be included in messages forwarded to the LLM service."""
+    from app.config import Settings
+    monkeypatch.setattr(Settings, "ALLOW_SYSTEM_MESSAGES", True)
 
     captured_messages = []
 
-    async def capturing_stream(messages, temperature, model):
+    async def capturing_stream(messages, temperature, model, **kwargs):
         captured_messages.extend(messages)
         yield f"data: {json.dumps({'content': 'ok'})}\n\n"
 

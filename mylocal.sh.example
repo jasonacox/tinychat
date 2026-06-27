@@ -1,0 +1,77 @@
+#!/bin/bash
+# Example local development environment for TinyChat.
+# Copy this file to mylocal.sh and fill in your values.
+# mylocal.sh is gitignored — never commit real API keys.
+
+# --- LLM Backend ---
+export OPENAI_API_URL=http://localhost:4000/v1   # LiteLLM, Ollama, LM Studio, etc.
+export OPENAI_API_KEY=your-api-key-here          # Use a placeholder for local proxies
+export DEFAULT_MODEL=gpt-3.5-turbo
+export DEFAULT_TEMPERATURE=0.7
+export AVAILABLE_MODELS="gpt-3.5-turbo,gpt-4"
+export ENABLE_DEBUG_LOGS="false"
+export CHAT_LOG=                                  # Leave blank to disable conversation logging
+export PORT=8008
+
+# --- Security / Rate Limiting ---
+export RATE_LIMIT="20/minute"          # SlowAPI rate limit per client IP (e.g. 30/minute, 100/hour)
+export ALLOWED_ORIGINS="*"             # Restrict in production, e.g. https://chat.example.com
+export ALLOW_SYSTEM_MESSAGES="false"   # Set true only for trusted/local deployments
+
+# --- Multi-backend (optional) ---
+# Uncomment and configure to enable backend switching in the UI.
+# Format: "name|url|key|models;name2|url2|key2|models2"
+# When set, AVAILABLE_MODELS is derived automatically — no need to set it separately.
+# export API_BACKENDS="Ollama|http://localhost:11434/v1|ollama|llama3,codellama;OpenAI|https://api.openai.com/v1|sk-YOUR-KEY|gpt-4o,gpt-4o-mini"
+
+# --- SwarmUI image generation ---
+export SWARMUI="http://localhost:7801"
+export IMAGE_MODEL=$(echo ${IMAGE_MODEL:-"Flux/flux1-schnell-fp8"})
+export IMAGE_CFGSCALE=$(echo ${IMAGE_CFGSCALE:-1.0})
+export IMAGE_STEPS=$(echo ${IMAGE_STEPS:-6})
+export IMAGE_WIDTH=$(echo ${IMAGE_WIDTH:-1024})
+export IMAGE_HEIGHT=$(echo ${IMAGE_HEIGHT:-1024})
+export IMAGE_SEED=$(echo ${IMAGE_SEED:--1})
+export IMAGE_TIMEOUT=$(echo ${IMAGE_TIMEOUT:-300})
+
+# --- OpenAI image generation (optional) ---
+export OPENAI_IMAGE_API_KEY="your-openai-key-here"
+export OPENAI_IMAGE_API_BASE=$(echo ${OPENAI_IMAGE_API_BASE:-"https://api.openai.com/v1"})
+export OPENAI_IMAGE_MODEL=$(echo ${OPENAI_IMAGE_MODEL:-"dall-e-3"})
+export OPENAI_IMAGE_SIZE=$(echo ${OPENAI_IMAGE_SIZE:-"1024x1024"})
+
+# Select which image provider to use: "swarmui" or "openai"
+export IMAGE_PROVIDER="swarmui"
+# export IMAGE_PROVIDER="openai"
+
+# --- RLM Security ---
+# Set a passcode to restrict RLM (code execution) access.
+# Leave blank to disable passcode protection (only for fully trusted local setups).
+export RLM_PASSCODE=""
+
+echo "Starting TinyChat locally with the following settings:"
+echo "  OPENAI_API_URL: $OPENAI_API_URL"
+echo "  DEFAULT_MODEL: $DEFAULT_MODEL"
+echo "  DEFAULT_TEMPERATURE: $DEFAULT_TEMPERATURE"
+echo "  AVAILABLE_MODELS: $AVAILABLE_MODELS"
+echo "  ENABLE_DEBUG_LOGS: $ENABLE_DEBUG_LOGS"
+echo "  CHAT_LOG: ${CHAT_LOG:-'(disabled)'}"
+echo "  PORT: $PORT"
+echo "  RATE_LIMIT: $RATE_LIMIT"
+echo "  ALLOWED_ORIGINS: $ALLOWED_ORIGINS"
+echo "  ALLOW_SYSTEM_MESSAGES: $ALLOW_SYSTEM_MESSAGES"
+echo "  API_BACKENDS: ${API_BACKENDS:+(set)}"
+echo "  IMAGE_PROVIDER: $IMAGE_PROVIDER"
+echo "  SWARMUI: $SWARMUI"
+echo "  IMAGE_MODEL: $IMAGE_MODEL"
+echo "  IMAGE_CFGSCALE: $IMAGE_CFGSCALE"
+echo "  IMAGE_STEPS: $IMAGE_STEPS"
+echo "  IMAGE_WIDTH: $IMAGE_WIDTH"
+echo "  IMAGE_HEIGHT: $IMAGE_HEIGHT"
+echo "  IMAGE_SEED: $IMAGE_SEED"
+echo "  IMAGE_TIMEOUT: $IMAGE_TIMEOUT"
+echo "  RLM_PASSCODE: ${RLM_PASSCODE:+***set***}"
+echo ""
+
+# Start TinyChat - pass all arguments to local.sh
+./local.sh "$@"
