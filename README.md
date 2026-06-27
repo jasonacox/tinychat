@@ -92,6 +92,10 @@ docker run -d \
 | `RLM_TIMEOUT` | `60` | RLM execution timeout (seconds) |
 | `MAX_CONCURRENT_RLM` | `3` | Maximum parallel RLM executions |
 | `RLM_PASSCODE` | *(empty)* | Passcode required to enable RLM (⚠️ **highly recommended**) |
+| `API_BACKENDS` | *(empty)* | Multi-backend config: `name\|url\|key\|models;name2\|url2\|key2\|models2` |
+| `RATE_LIMIT` | `20/minute` | SlowAPI rate limit per client IP (e.g. `30/minute`, `100/hour`) |
+| `ALLOWED_ORIGINS` | `*` | Comma-separated CORS allowed origins (restrict in production) |
+| `ALLOW_SYSTEM_MESSAGES` | `false` | Allow client-supplied system-role messages (enable for trusted deployments) |
 
 ### Compatible APIs
 
@@ -114,6 +118,25 @@ AVAILABLE_MODELS=llama-2-70b-chat,mixtral-8x7b-32768
 OPENAI_API_URL=http://your-api:4000/v1
 AVAILABLE_MODELS=your-model-1,your-model-2
 ```
+
+### Multi-Backend Support
+
+Run multiple LLM backends in a single deployment. Use `API_BACKENDS` instead of the single-backend `OPENAI_API_URL` / `OPENAI_API_KEY`:
+
+```bash
+docker run -d \
+  --name tinychat \
+  -p 8000:8000 \
+  -e API_BACKENDS="OpenAI|https://api.openai.com/v1|sk-your-key|gpt-4o,gpt-4o-mini;Local|http://localhost:11434/v1|ollama|llama3,codellama" \
+  jasonacox/tinychat:latest
+```
+
+Format: `name|url|key|comma-separated-models` — separate multiple backends with `;`.
+
+- A backend selector appears in the sidebar automatically when more than one backend is configured.
+- API keys are never sent to the client.
+- Falls back to single-backend mode (`OPENAI_API_URL` / `OPENAI_API_KEY`) when `API_BACKENDS` is unset.
+- `AVAILABLE_MODELS` is auto-derived from `API_BACKENDS` — no need to set it separately.
 
 ### Image Generation
 

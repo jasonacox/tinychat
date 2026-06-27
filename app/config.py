@@ -127,16 +127,24 @@ class Settings:
     @classmethod
     def initialize(cls):
         """Initialize and validate configuration."""
-        # Parse multi-backend configuration
+        # Parse multi-backend configuration first — AVAILABLE_MODELS is then
+        # derived from the parsed backends so there is a single source of truth.
         cls._parse_backends()
 
-        # Parse available models
-        models_str = os.getenv("AVAILABLE_MODELS", f"{cls.DEFAULT_MODEL},gpt-3.5-turbo,gpt-4,gpt-4-turbo")
-        cls.AVAILABLE_MODELS = list(dict.fromkeys([
-            model.strip() for model in models_str.split(",") if model.strip()
-        ]))
+        # Derive AVAILABLE_MODELS from backends (single source of truth).
+        # In single-backend mode this is identical to what AVAILABLE_MODELS env
+        # var produced before; in multi-backend mode it is the union of all
+        # backend model lists (preserving order, deduplicating).
+        all_models: list = []
+        seen: set = set()
+        for backend in cls.API_BACKENDS:
+            for m in backend.get("models", []):
+                if m not in seen:
+                    all_models.append(m)
+                    seen.add(m)
+        cls.AVAILABLE_MODELS = all_models
 
-        # Ensure DEFAULT_MODEL is in AVAILABLE_MODELS
+        # Ensure DEFAULT_MODEL is present
         if cls.DEFAULT_MODEL not in cls.AVAILABLE_MODELS:
             logger.warning(f"⚠️  Configuration issue: DEFAULT_MODEL '{cls.DEFAULT_MODEL}' not in AVAILABLE_MODELS")
             logger.warning(f"   Adding '{cls.DEFAULT_MODEL}' to available models list")
@@ -180,6 +188,15 @@ class Settings:
                 key = parts[2].strip()
                 models_csv = parts[3].strip() if len(parts) > 3 else ""
                 models = [m.strip() for m in models_csv.split(",") if m.strip()] if models_csv else []
+
+                # Validate URL scheme — a missing scheme produces a cryptic httpx error at request time
+                if not url.startswith("http://") and not url.startswith("https://"):
+                    logger.error(
+                        f"❌ Backend '{name}' has an invalid URL '{url}' — "
+                        "must start with http:// or https://. Skipping this backend."
+                    )
+                    continue
+
                 cls.API_BACKENDS.append({
                     "name": name,
                     "url": url,
@@ -188,9 +205,22 @@ class Settings:
                 })
             if cls.API_BACKENDS:
                 logger.info(f"  Multi-backend: {len(cls.API_BACKENDS)} backend(s) configured")
+                # Warn if any backend key looks like a real API secret
+                for b in cls.API_BACKENDS:
+                    k = b.get("key", "")
+                    if k and (k.startswith("sk-") or k.startswith("Bearer ")):
+                        logger.warning(
+                            f"⚠️  Backend '{b['name']}' has a real-looking API key in API_BACKENDS. "
+                            "Ensure this env var is not logged or exposed."
+                        )
 
         # If no backends configured, build a default from the single-endpoint vars
         if not cls.API_BACKENDS:
+            if not cls.OPENAI_API_URL.startswith("http://") and not cls.OPENAI_API_URL.startswith("https://"):
+                raise ValueError(
+                    f"OPENAI_API_URL '{cls.OPENAI_API_URL}' is invalid — "
+                    "must start with http:// or https://"
+                )
             models_str = os.getenv("AVAILABLE_MODELS", f"{cls.DEFAULT_MODEL},gpt-3.5-turbo,gpt-4,gpt-4-turbo")
             default_models = [m.strip() for m in models_str.split(",") if m.strip()]
             cls.API_BACKENDS.append({

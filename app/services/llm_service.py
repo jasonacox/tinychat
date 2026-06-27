@@ -355,71 +355,91 @@ Answer the user's questions based on the above context."""
         logger.debug("=" * 80)
         
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                logger.debug(f"Making request to {api_url}/chat/completions")
-                
-                async with client.stream(
-                    "POST",
-                    f"{api_url}/chat/completions",
-                    headers=headers,
-                    json=payload
-                ) as response:
-                    logger.debug("=" * 60)
-                    logger.debug(f"📥 LLM API RESPONSE")
-                    logger.debug(f"Status: {response.status_code} {response.reason_phrase}")
-                    logger.debug(f"Headers: {json.dumps(dict(response.headers), indent=2)}")
-                    logger.debug("=" * 60)
-                    
-                    # Handle non-200 responses
-                    if response.status_code != 200:
-                        try:
-                            error_content = await response.aread()
-                            error_text = error_content.decode('utf-8', errors='ignore')
-                        except Exception:
-                            error_text = "Could not read error response"
-                        
-                        # Check for vision-related errors
-                        error_lower = error_text.lower()
-                        if any(keyword in error_lower for keyword in [
-                            'image', 'vision', 'multimodal', 'content type', 'invalid content',
-                            'content array', 'image_url', 'image_data', 'should be a valid string', 'input should be'
-                        ]):
-                            vision_error_msg = "The language model was unable to process your image. Removing."
-                            logger.warning(f"Model doesn't support vision (HTTP {response.status_code}): {error_text}")
-                            yield f"data: {json.dumps({'error': 'vision_not_supported', 'message': vision_error_msg, 'remove_images': True})}\n\n"
-                            return
-                        
-                        logger.error(f"❌ API error {response.status_code}: {error_text}")
-                        yield f"data: {json.dumps({'error': error_text})}\n\n"
-                        return
-                    
-                    line_count = 0
-                    async for line in response.aiter_lines():
-                        line_count += 1
+            # Attempt up to 2 times: first with stream_options (for token usage),
+            # then without if the backend rejects it (e.g. Ollama, older LiteLLM).
+            for attempt in range(2):
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    logger.debug(f"Making request to {api_url}/chat/completions (attempt {attempt + 1})")
 
-                        if line.startswith("data: "):
-                            data = line[6:]  # Remove "data: " prefix
-                            if data == "[DONE]":
-                                break
+                    async with client.stream(
+                        "POST",
+                        f"{api_url}/chat/completions",
+                        headers=headers,
+                        json=payload
+                    ) as response:
+                        logger.debug("=" * 60)
+                        logger.debug(f"📥 LLM API RESPONSE")
+                        logger.debug(f"Status: {response.status_code} {response.reason_phrase}")
+                        logger.debug(f"Headers: {json.dumps(dict(response.headers), indent=2)}")
+                        logger.debug("=" * 60)
 
+                        # Handle non-200 responses
+                        if response.status_code != 200:
                             try:
-                                chunk = json.loads(data)
+                                error_content = await response.aread()
+                                error_text = error_content.decode('utf-8', errors='ignore')
+                            except Exception:
+                                error_text = "Could not read error response"
 
-                                # Check for usage data (sent as final chunk with stream_options)
-                                if "usage" in chunk and chunk["usage"]:
-                                    usage = chunk["usage"]
-                                    yield f"data: {json.dumps({'usage': usage})}\n\n"
+                            # On first attempt, check if the backend rejected stream_options.
+                            # Common indicators: "unknown field", "extra inputs", "stream_options".
+                            if attempt == 0 and response.status_code in (400, 422):
+                                error_lower = error_text.lower()
+                                if any(kw in error_lower for kw in [
+                                    'stream_options', 'unknown field', 'extra inputs',
+                                    'unexpected keyword', 'unrecognized'
+                                ]):
+                                    logger.warning(
+                                        f"⚠️  Backend '{api_url}' rejected stream_options "
+                                        f"(HTTP {response.status_code}): {error_text[:200]}. "
+                                        "Retrying without usage tracking."
+                                    )
+                                    payload.pop("stream_options", None)
+                                    break  # break inner stream context, retry loop continues
 
-                                if "choices" in chunk and chunk["choices"]:
-                                    delta = chunk["choices"][0].get("delta", {})
-                                    if "content" in delta:
-                                        content = delta["content"]
-                                        yield f"data: {json.dumps({'content': content})}\n\n"
-                            except json.JSONDecodeError as e:
-                                logger.warning(f"Failed to parse JSON chunk: {data} - Error: {e}")
-                                continue
+                            # Check for vision-related errors
+                            error_lower = error_text.lower()
+                            if any(keyword in error_lower for keyword in [
+                                'image', 'vision', 'multimodal', 'content type', 'invalid content',
+                                'content array', 'image_url', 'image_data', 'should be a valid string', 'input should be'
+                            ]):
+                                vision_error_msg = "The language model was unable to process your image. Removing."
+                                logger.warning(f"Model doesn't support vision (HTTP {response.status_code}): {error_text}")
+                                yield f"data: {json.dumps({'error': 'vision_not_supported', 'message': vision_error_msg, 'remove_images': True})}\n\n"
+                                return
 
-                    logger.debug(f"Stream completed: {line_count} lines received")
+                            logger.error(f"❌ API error {response.status_code}: {error_text}")
+                            yield f"data: {json.dumps({'error': error_text})}\n\n"
+                            return
+
+                        line_count = 0
+                        async for line in response.aiter_lines():
+                            line_count += 1
+
+                            if line.startswith("data: "):
+                                data = line[6:]  # Remove "data: " prefix
+                                if data == "[DONE]":
+                                    break
+
+                                try:
+                                    chunk = json.loads(data)
+
+                                    # Check for usage data (sent as final chunk with stream_options)
+                                    if "usage" in chunk and chunk["usage"]:
+                                        usage = chunk["usage"]
+                                        yield f"data: {json.dumps({'usage': usage})}\n\n"
+
+                                    if "choices" in chunk and chunk["choices"]:
+                                        delta = chunk["choices"][0].get("delta", {})
+                                        if "content" in delta:
+                                            content = delta["content"]
+                                            yield f"data: {json.dumps({'content': content})}\n\n"
+                                except json.JSONDecodeError as e:
+                                    logger.warning(f"Failed to parse JSON chunk: {data} - Error: {e}")
+                                    continue
+
+                        logger.debug(f"Stream completed: {line_count} lines received")
+                        return  # success — do not retry
                                 
         except httpx.HTTPStatusError as e:
             # Read the response content properly for streaming responses

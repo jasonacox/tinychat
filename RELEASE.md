@@ -1,5 +1,89 @@
 # Release Notes
 
+## v0.4.0 - Multi-Backend, Token Counter, Export/Import, System Prompts, Paste-to-Vision
+
+**Contributors**: Huge thanks to [@kochj23](https://github.com/kochj23) for authoring all five major features in this release (PRs #14–#18).
+
+### Features
+
+- **Multi-Backend Switching** (PR #15): Support for multiple LLM backends in a single deployment.
+  - Configure via `API_BACKENDS` env var: `"name|url|key|models;name2|url2|key2|models2"`
+  - Backend selector appears in the sidebar when more than one backend is configured.
+  - Each backend carries its own URL, API key, and model list; keys are never sent to the client.
+  - Soft model validation: warns in logs if the requested model is not in a backend's list, but does not hard-reject (supports backends like Ollama that accept unlisted models).
+  - Falls back to single-backend mode (`OPENAI_API_URL` / `OPENAI_API_KEY`) when `API_BACKENDS` is unset.
+  - Backend and model selections are persisted per user (localStorage) and can be set via URL parameters (`?backend=X&model=Y`).
+
+- **Token Usage Counter** (PR #17): Live running token total displayed in the chat header.
+  - Requests sent with `stream_options: {include_usage: true}`; usage forwarded in SSE stream.
+  - Per-message token usage stored with conversation history; counter resets on new conversation.
+  - Recalculated correctly when switching between or reloading conversations.
+
+- **Export / Import Conversations** (PR #18): Backup and restore conversation history.
+  - Export all conversations to a dated JSON file (`tinychat-export-YYYY-MM-DD.json`).
+  - Import supports **merge** (add without overwriting) or **replace** modes.
+  - Imported conversations are sanitized (DOMPurify) to prevent XSS via title or message content.
+  - File size limit enforced client-side (100 MB); malformed JSON rejected with a clear error.
+
+- **System Prompt Presets** (PR #14): Save, load, and manage named system prompts.
+  - Three built-in presets: Default, Concise, Creative (cannot be deleted).
+  - Users can create, edit, rename, and delete custom presets.
+  - Selected preset injected as the system message on each request; persisted in localStorage.
+  - Preset manager accessible via a dropdown in the header.
+
+- **Paste-to-Image Vision** (PR #16): Clipboard image pasting support.
+  - `Ctrl+V` / `Cmd+V` in the message input now detects image clipboard data.
+  - Pastes are processed through the same pipeline as drag-and-drop and file-picker uploads.
+  - Existing drag-and-drop and file upload for images and documents preserved.
+
+### Backend Improvements
+
+- **Multi-Backend Security Hardening**:
+  - API keys are never included in `/api/config` responses — backend objects only expose `name` and `models`.
+  - Startup warning logged if a backend key looks like a real credential (non-placeholder, length > 8).
+  - `API_BACKENDS` URL validation rejects non-`http`/`https` schemes at startup.
+  - `AVAILABLE_MODELS` is now derived solely from `API_BACKENDS` (single source of truth) — no manual sync needed.
+  - Unknown backend name in a request returns `400 Bad Request` instead of silently falling back.
+
+- **Request Validation**:
+  - Missing request body now returns `422 Unprocessable Entity` (was silently treated as `None`).
+  - Model name validated against max 200 characters and a safe charset (`^[a-zA-Z0-9._:/@-]+$`); invalid names rejected with 422.
+
+- **Export/Import Security Fix**: `stripHtml()` was HTML-encoding input instead of stripping tags — fixed to correctly remove markup before it reaches `innerHTML`.
+  - Old code: `div.textContent = str; return div.innerHTML` (encodes, does not strip)
+  - New code: `div.innerHTML = str; return div.textContent` (strips all tags)
+
+- **Import Dialog**: Replaced `window.prompt()` (blocked in some browsers/CSPs) with a custom modal for choosing merge vs. replace on import.
+
+- **Stream Options Compatibility**: Backends that reject `stream_options: {include_usage: true}` (e.g. local Ollama) now get an automatic retry without that field, so token counting degrades gracefully instead of failing.
+
+- **SwarmUI Health Check Fix** (PR #19): Health check now uses POST and verifies GPU backend state.
+  - Old GET-based health check was rejected by SwarmUI with a 302 redirect.
+  - New check: POST `/API/GetNewSession` → POST `/API/GetCurrentStatus`; marks unhealthy if `backend_class` is `"error"` or `"unknown"`.
+  - Health cache TTL kept at 30 seconds.
+
+- **Debug Logging**: Fixed `ENABLE_DEBUG_LOGS` actually enabling `DEBUG`-level log output.
+  - Previously, `ENABLE_DEBUG_LOGS=true` only exposed `/docs` and `/redoc` but never changed the logger level.
+  - Now sets the `tinychat` logger to `DEBUG` on startup when enabled.
+  - Per-chunk stream debug noise removed; summary line (`Stream completed: N lines`) retained.
+
+- **SlowAPI Parameter Fix**: Fixed `500 Internal Server Error` on the chat stream endpoint.
+  - SlowAPI requires the `starlette.requests.Request` parameter to be named `request`; the old naming convention broke rate-limiting injection.
+
+- **Test Infrastructure**: Added GitHub Actions CI workflow running the full pytest suite on Python 3.11, 3.12, and 3.13 on every push and PR to `main`. Test suite expanded with:
+  - `test_config_security.py` — verifies API keys never appear in `/api/config` responses.
+  - `test_multi_backend.py` — covers backend routing, unknown backend rejection, URL validation, and config structure.
+  - Existing test suite migrated fully to `anyio` (no `pytest-asyncio` dependency for test execution).
+
+### Environment Variables Added
+
+| Variable | Default | Description |
+|---|---|---|
+| `API_BACKENDS` | _(unset)_ | Semicolon-separated list of backends: `name\|url\|key\|models` |
+| `RATE_LIMIT` | `20/minute` | SlowAPI rate limit string per client IP |
+| `ALLOWED_ORIGINS` | `*` | Comma-separated CORS allowed origins |
+| `ALLOW_SYSTEM_MESSAGES` | `false` | Allow client-supplied system-role messages |
+
 ## v0.3.5 - Model Display and Performance Fixes
 
 ### Security

@@ -98,25 +98,10 @@ async function importConversations(event) {
 
         let mode = 'merge'; // default
         if (existingCount > 0) {
-            const choice = prompt(
-                `Import ${importCount} conversation${importCount !== 1 ? 's' : ''}.\n\n` +
-                `You currently have ${existingCount} conversation${existingCount !== 1 ? 's' : ''}.\n\n` +
-                `Type "merge" to add imported conversations to existing ones,\n` +
-                `or "replace" to overwrite all existing conversations.\n\n` +
-                `(Cancel to abort)`,
-                'merge'
-            );
-
-            if (choice === null) {
+            mode = await showImportModeModal(importCount, existingCount);
+            if (mode === null) {
                 fileInput.value = '';
                 return; // User cancelled
-            }
-
-            mode = choice.trim().toLowerCase();
-            if (mode !== 'merge' && mode !== 'replace') {
-                showError('Import cancelled. Please type "merge" or "replace".');
-                fileInput.value = '';
-                return;
             }
         }
 
@@ -171,7 +156,14 @@ async function importConversations(event) {
 
 /**
  * Sanitize a conversation object to prevent XSS when rendered in the DOM.
- * Strips HTML/script tags from title and message content fields.
+ * Strips HTML tags from title and message content fields as defense-in-depth.
+ *
+ * Note: all render paths are already safe —
+ *   • markdown mode: content → renderMarkdownWithMath() → DOMPurify.sanitize() → innerHTML
+ *   • plain mode:    content → document.createTextNode() (never parsed as HTML)
+ * This sanitization is an extra layer applied once at import time so that any
+ * future render path added without DOMPurify cannot accidentally execute
+ * injected HTML from an imported file.
  */
 function sanitizeConversation(conv) {
     const sanitized = { ...conv };
@@ -190,12 +182,16 @@ function sanitizeConversation(conv) {
 }
 
 /**
- * Remove HTML tags from a string to prevent XSS when inserted via innerHTML.
+ * Strip HTML tags from a string, returning plain text.
+ * Uses the browser's HTML parser to extract text content,
+ * which removes all tags while preserving their visible text.
+ *
+ * Example: stripHtml('<b>Hello</b><script>evil()</script>') → 'Helloevil()'
  */
 function stripHtml(str) {
     const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+    div.innerHTML = str;
+    return div.textContent || div.innerText || '';
 }
 
 /**
@@ -235,4 +231,77 @@ function validateImportData(data) {
     }
 
     return null; // Valid
+}
+
+/**
+ * Show a styled modal asking the user to choose merge or replace.
+ * Returns 'merge', 'replace', or null (cancelled).
+ */
+function showImportModeModal(importCount, existingCount) {
+    return new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.className = 'import-mode-modal';
+
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+
+        const content = document.createElement('div');
+        content.className = 'modal-content';
+
+        const title = document.createElement('h3');
+        title.textContent = 'Import Conversations';
+
+        const body = document.createElement('p');
+        body.textContent =
+            `Importing ${importCount} conversation${importCount !== 1 ? 's' : ''}. ` +
+            `You currently have ${existingCount} conversation${existingCount !== 1 ? 's' : ''}.`;
+
+        const buttons = document.createElement('div');
+        buttons.className = 'modal-buttons';
+
+        const mergeBtn = document.createElement('button');
+        mergeBtn.className = 'btn-merge';
+        mergeBtn.textContent = 'Merge';
+        mergeBtn.title = 'Add imported conversations alongside existing ones';
+
+        const replaceBtn = document.createElement('button');
+        replaceBtn.className = 'btn-replace';
+        replaceBtn.textContent = 'Replace All';
+        replaceBtn.title = 'Overwrite all existing conversations with the import';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn-cancel';
+        cancelBtn.textContent = 'Cancel';
+
+        buttons.appendChild(mergeBtn);
+        buttons.appendChild(replaceBtn);
+        buttons.appendChild(cancelBtn);
+
+        content.appendChild(title);
+        content.appendChild(body);
+        content.appendChild(buttons);
+        modal.appendChild(overlay);
+        modal.appendChild(content);
+        document.body.appendChild(modal);
+
+        function close(result) {
+            document.removeEventListener('keydown', onKey);
+            if (modal.isConnected) modal.remove();
+            resolve(result);
+        }
+
+        mergeBtn.onclick = () => close('merge');
+        replaceBtn.onclick = () => close('replace');
+        cancelBtn.onclick = () => close(null);
+        overlay.onclick = () => close(null);
+
+        // ESC to cancel
+        function onKey(e) {
+            if (e.key === 'Escape') close(null);
+        }
+        document.addEventListener('keydown', onKey);
+
+        // Focus merge button by default
+        mergeBtn.focus();
+    });
 }

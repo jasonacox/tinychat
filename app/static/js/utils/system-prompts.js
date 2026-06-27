@@ -44,7 +44,7 @@ const systemPrompts = {
         // Load selected preset, normalized to a valid id
         this.selectedId = await storageAdapter.getItem(SELECTED_PROMPT_KEY);
         if (!this.selectedId || (this.selectedId !== 'none' && !this.getById(this.selectedId))) {
-            this.selectedId = 'default';
+            this.selectedId = 'none';
         }
 
         this.populateDropdown();
@@ -66,14 +66,16 @@ const systemPrompts = {
     },
 
     /**
-     * Get the currently selected preset
+     * Get the currently selected preset, or null if 'none' is selected.
      */
     getSelected() {
-        return this.getById(this.selectedId) || this.presets[0];
+        if (this.selectedId === 'none') return null;
+        return this.getById(this.selectedId) || null;
     },
 
     /**
-     * Get the system prompt content for the selected preset
+     * Get the system prompt content for the selected preset.
+     * Returns empty string when 'none' is selected (no system prompt).
      */
     getSelectedContent() {
         const preset = this.getSelected();
@@ -127,10 +129,10 @@ const systemPrompts = {
 
         this.presets = this.presets.filter(p => p.id !== id);
 
-        // If deleted preset was selected, revert to default
+        // If deleted preset was selected, revert to none
         if (this.selectedId === id) {
-            this.selectedId = 'default';
-            await storageAdapter.setItem(SELECTED_PROMPT_KEY, 'default');
+            this.selectedId = 'none';
+            await storageAdapter.setItem(SELECTED_PROMPT_KEY, 'none');
         }
 
         await this.save();

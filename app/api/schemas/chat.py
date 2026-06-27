@@ -55,14 +55,28 @@ class ChatRequest(BaseModel):
         """
         Validate model name.
 
-        When multi-backend is configured, models are validated against the
-        selected backend's model list rather than the global AVAILABLE_MODELS.
-        Since pydantic validators don't have access to other field values,
-        we allow any non-empty model string here and validate against the
-        backend in the endpoint handler.
+        Always enforces a max length and safe character set to prevent
+        oversized or specially crafted strings from reaching upstream APIs.
+
+        In single-backend mode, also validates against AVAILABLE_MODELS.
+        In multi-backend mode, strict list-membership is skipped (backends
+        like Ollama accept unlisted models); the endpoint handler does a
+        soft warning check instead.
         """
-        if v is not None and len(Settings.API_BACKENDS) <= 1:
-            # Single-backend mode: strict validation
+        if v is None:
+            return v
+
+        # Always enforce max length and safe character set regardless of mode
+        if len(v) > 200:
+            raise ValueError("Model name too long (max 200 characters)")
+        if not re.match(r'^[a-zA-Z0-9._:/@-]+$', v):
+            raise ValueError(
+                "Model name contains invalid characters. "
+                "Allowed: letters, digits, and . _ : / @ -"
+            )
+
+        if len(Settings.API_BACKENDS) <= 1:
+            # Single-backend mode: strict validation against known models
             if v not in Settings.AVAILABLE_MODELS:
                 logger.error(f"Invalid model requested: '{v}'. Available models: {', '.join(Settings.AVAILABLE_MODELS)}")
                 raise ValueError(f"Model must be one of: {', '.join(Settings.AVAILABLE_MODELS)}")

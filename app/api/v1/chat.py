@@ -3,7 +3,7 @@
 import json
 import logging
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Body, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from app.api.schemas import ChatRequest
@@ -23,7 +23,7 @@ router = APIRouter()
 
 @router.post("/api/chat/stream")
 @limiter.limit(RATE_LIMIT)
-async def chat_stream(request: Request, chat_request: ChatRequest = None):
+async def chat_stream(request: Request, chat_request: ChatRequest = Body(...)):
     """
     Stream chat completions via Server-Sent Events (stateless endpoint).
     

@@ -505,7 +505,22 @@ async function addMessageToUI(role, content, timestamp, useMarkdown = false, fil
             
             const docHeader = document.createElement('div');
             docHeader.className = 'document-header';
-            docHeader.innerHTML = `<div class="document-icon">📄</div><div class="document-info"><div class="document-name">${fileData.data.name}</div><div class="document-meta">${fileData.data.pages} page(s) • ${(fileData.data.size / 1024).toFixed(0)}KB</div></div>`;
+            // Use textContent / createElement for user-supplied values to avoid XSS
+            const docIcon = document.createElement('div');
+            docIcon.className = 'document-icon';
+            docIcon.textContent = '📄';
+            const docInfo = document.createElement('div');
+            docInfo.className = 'document-info';
+            const docName = document.createElement('div');
+            docName.className = 'document-name';
+            docName.textContent = fileData.data.name;
+            const docMeta = document.createElement('div');
+            docMeta.className = 'document-meta';
+            docMeta.textContent = `${fileData.data.pages} page(s) • ${(fileData.data.size / 1024).toFixed(0)}KB`;
+            docInfo.appendChild(docName);
+            docInfo.appendChild(docMeta);
+            docHeader.appendChild(docIcon);
+            docHeader.appendChild(docInfo);
             
             const expandBtn = document.createElement('button');
             expandBtn.className = 'document-expand';
