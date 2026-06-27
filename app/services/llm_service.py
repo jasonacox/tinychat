@@ -134,12 +134,26 @@ Answer the user's questions based on the above context."""
         return modified
     
     @staticmethod
+    def _has_image(msg: Dict) -> bool:
+        """Check if a message contains an image (legacy field or multimodal array)."""
+        if msg.get('image'):
+            return True
+        content = msg.get('content')
+        if isinstance(content, list):
+            return any(
+                isinstance(p, dict) and p.get('type') == 'image_url'
+                for p in content
+            )
+        return False
+
+    @staticmethod
     def filter_images_keep_latest(messages: List[Dict]) -> List[Dict]:
         """
         Remove all images except the most recent one.
         
         This prevents API errors with LLMs that only support single images.
         Keeps the last user message with an image, removes all prior images.
+        Handles both legacy 'image' field and multimodal 'content' arrays.
         
         Args:
             messages: Full conversation history
@@ -147,10 +161,10 @@ Answer the user's questions based on the above context."""
         Returns:
             Filtered messages with only the most recent image
         """
-        # Find index of last message with image
+        # Find index of last message with image (legacy or multimodal)
         last_image_idx = None
         for i in range(len(messages) - 1, -1, -1):
-            if messages[i].get('image'):
+            if LLMService._has_image(messages[i]):
                 last_image_idx = i
                 break
         
@@ -161,14 +175,32 @@ Answer the user's questions based on the above context."""
         # Remove all images except the last one
         filtered = []
         for i, msg in enumerate(messages):
+            if i == last_image_idx:
+                filtered.append(msg)
+                continue
+
             msg_copy = msg.copy()
-            if msg_copy.get('image') and i != last_image_idx:
-                # Remove image from this message
+            if msg_copy.get('image'):
+                # Remove legacy image fields
                 msg_copy.pop('image', None)
                 msg_copy.pop('image_type', None)
+
+            content = msg_copy.get('content')
+            if isinstance(content, list):
+                # Remove image_url parts from multimodal content arrays
+                msg_copy['content'] = [
+                    p for p in content
+                    if not (isinstance(p, dict) and p.get('type') == 'image_url')
+                ]
+                # If only text parts remain, collapse back to string for efficiency
+                if len(msg_copy['content']) == 1 and msg_copy['content'][0].get('type') == 'text':
+                    msg_copy['content'] = msg_copy['content'][0].get('text', '')
+                elif len(msg_copy['content']) == 0:
+                    msg_copy['content'] = ''
+
             filtered.append(msg_copy)
         
-        logger.debug(f"Filtered images: kept image at index {last_image_idx}, removed {sum(1 for m in messages if m.get('image')) - 1} older images")
+        logger.debug(f"Filtered images: kept image at index {last_image_idx}, removed older images")
         return filtered
     
     @staticmethod

@@ -90,15 +90,25 @@ class ChatRequest(BaseModel):
                     if part['type'] == 'text':
                         if 'text' not in part:
                             raise ValueError("Text content part must have a 'text' field")
+                        if not isinstance(part['text'], str):
+                            raise ValueError("Text content part 'text' must be a string")
                         if len(part['text']) > Settings.MAX_MESSAGE_LENGTH:
                             raise ValueError(f"Text content too long (max {Settings.MAX_MESSAGE_LENGTH})")
                     elif part['type'] == 'image_url':
-                        if 'image_url' not in part or 'url' not in part['image_url']:
-                            raise ValueError("image_url content part must have 'image_url.url'")
-                        url = part['image_url']['url']
+                        if not isinstance(part.get('image_url'), dict):
+                            raise ValueError("image_url content part must have an 'image_url' object")
+                        url = part['image_url'].get('url')
+                        if not isinstance(url, str):
+                            raise ValueError("image_url.url must be a string")
                         # Accept data URIs (base64 images) and remote URLs
                         if not (url.startswith('data:image/') or url.startswith('http://') or url.startswith('https://')):
                             raise ValueError("image_url must be a data URI or HTTP(S) URL")
+                        # Enforce size limit on data URIs to prevent unbounded payloads
+                        if url.startswith('data:'):
+                            estimated_size = len(url) * 3 / 4  # approximate decoded size
+                            max_image_size = 10 * 1024 * 1024  # 10MB, consistent with legacy image field
+                            if estimated_size > max_image_size:
+                                raise ValueError(f"Image in content array too large (max 10MB)")
                     else:
                         raise ValueError(f"Unknown content part type: {part['type']}")
             else:

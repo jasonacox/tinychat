@@ -132,15 +132,15 @@ async function processImageFile(file) {
         const base64 = await fileToBase64(file);
 
         // Resize for vision (max 1024px on longest side)
-        const compressed = await compressImageIfNeeded(base64, file.type);
+        const result = await compressImageIfNeeded(base64, file.type);
 
         attachedImage = {
-            data: compressed,
-            type: file.type,
+            data: result.data,
+            type: result.type,
             fileName: fileName
         };
 
-        showImagePreview(compressed, file.type, fileName);
+        showImagePreview(result.data, result.type, fileName);
     } catch (error) {
         console.error('Error processing image:', error);
         showError('Failed to process image. Please try again.');
@@ -167,6 +167,7 @@ function fileToBase64(file) {
  * Resize image for vision API (max 1024px on longest side).
  * Always resizes to keep payloads reasonable for LLM vision endpoints.
  */
+// Returns { data: base64String, type: mimeType } so callers can track the actual output type.
 async function resizeImageForVision(base64Data, mimeType) {
     const maxDimension = 1024;
 
@@ -180,7 +181,7 @@ async function resizeImageForVision(base64Data, mimeType) {
             if (width <= maxDimension && height <= maxDimension) {
                 const sizeInBytes = (base64Data.length * 3) / 4;
                 console.log(`Image ${width}x${height} within limits (${(sizeInBytes / 1024).toFixed(0)}KB)`);
-                resolve(base64Data);
+                resolve({ data: base64Data, type: mimeType });
                 return;
             }
 
@@ -211,7 +212,7 @@ async function resizeImageForVision(base64Data, mimeType) {
             const newSize = (compressedBase64.length * 3) / 4;
             console.log(`Resized to ${width}x${height}: ${(newSize / 1024).toFixed(0)}KB`);
 
-            resolve(compressedBase64);
+            resolve({ data: compressedBase64, type: outputType });
         };
         img.src = `data:${mimeType};base64,${base64Data}`;
     });
@@ -223,6 +224,7 @@ async function resizeImageForVision(base64Data, mimeType) {
  */
 async function compressImageIfNeeded(base64Data, mimeType) {
     // Always resize for vision (max 1024px on longest side)
+    // Returns { data, type } with the actual output MIME type
     return resizeImageForVision(base64Data, mimeType);
 }
 
