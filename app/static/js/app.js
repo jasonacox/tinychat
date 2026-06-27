@@ -59,10 +59,29 @@ async function setupEventListeners() {
         }
     });
 
+    // Backend selection listener
+    const backendSelect = document.getElementById('backend');
+    backendSelect.addEventListener('change', async function() {
+        await saveBackendPreference(this.value);
+        // Refresh models for the newly selected backend
+        await populateModelsForBackend(this.value);
+    });
+
     // Model selection listener
     const modelSelect = document.getElementById('model');
     modelSelect.addEventListener('change', async function() {
         await saveModelPreference(this.value);
+    });
+
+    // System prompt preset listeners
+    const systemPromptSelect = document.getElementById('systemPromptSelect');
+    systemPromptSelect.addEventListener('change', async function() {
+        await systemPrompts.select(this.value);
+    });
+
+    const editPromptsBtn = document.getElementById('editPromptsBtn');
+    editPromptsBtn.addEventListener('click', function() {
+        systemPrompts.showEditModal();
     });
 
     // RLM toggle listener - with passcode protection
@@ -162,7 +181,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // Initialize RLM security
     await rlmSecurity.initialize();
-    
+
+    // Initialize system prompt presets
+    await systemPrompts.initialize();
+
     // Track session for analytics
     try {
         const sessionResponse = await fetch('/api/session' + (sessionId ? `?session_id=${sessionId}` : ''));

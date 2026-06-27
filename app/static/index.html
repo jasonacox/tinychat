@@ -69,11 +69,24 @@
                     <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7">
                     <span id="temperature-value">0.7</span>
                 </div>
+                <div class="setting-group" id="backendGroup" style="display: none;">
+                    <label for="backend">Backend:</label>
+                    <select id="backend">
+                        <option value="">Loading...</option>
+                    </select>
+                </div>
                 <div class="setting-group">
                     <label for="model">Model:</label>
                     <select id="model">
                         <option value="">Loading...</option>
                     </select>
+                </div>
+                <div class="setting-group system-prompt-group">
+                    <label for="systemPromptSelect">System Prompt:</label>
+                    <select id="systemPromptSelect">
+                        <option value="default">Default</option>
+                    </select>
+                    <button class="edit-prompts-btn" id="editPromptsBtn" title="Manage presets">Edit</button>
                 </div>
                 <div class="checkbox-row">
                     <div class="setting-group">
@@ -139,6 +152,7 @@
 
         <div class="footer" id="footer">
             TinyChat v<span id="version">...</span> | <a href="https://github.com/jasonacox/tinychat" target="_blank">GitHub</a>
+            <span id="tokenTotalWrap" style="display: none;"> | <span id="tokenTotal" class="token-total"></span></span>
         </div>
     </div>
 
@@ -146,6 +160,7 @@
     <script src="/static/js/utils/storage-adapter.js"></script>
     <script src="/static/js/config.js"></script>
     <script src="/static/js/utils/storage.js"></script>
+    <script src="/static/js/utils/system-prompts.js"></script>
     <script src="/static/js/utils/markdown.js"></script>
     <script src="/static/js/utils/file-upload.js"></script>
     <script src="/static/js/utils/export-import.js"></script>

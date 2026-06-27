@@ -45,18 +45,21 @@ async function createNewConversation() {
         created: new Date().toISOString(),
         last_updated: new Date().toISOString()
     };
-    
+
     await saveConversation(conversationId, conversation);
     currentConversationId = conversationId;
-    
+
+    // Reset token counter for new conversation
+    resetTokenTotal();
+
     document.getElementById('messages').innerHTML = `
         <div style="text-align: center; color: #999; margin-top: 50px;">
             New conversation started! Type a message to begin.
         </div>
     `;
-    
+
     await loadConversations();
-    
+
     // Set focus to message input for immediate typing
     document.getElementById('messageInput').focus();
 }
@@ -83,21 +86,25 @@ async function loadConversation(conversationId) {
     
     const container = document.getElementById('messages');
     container.innerHTML = '';
-    
+
+    // Recalculate token totals from stored usage data
+    recalcTokenTotal(conversation.messages);
+
     // Use for...of instead of forEach to support async/await
     for (const message of conversation.messages) {
         // For assistant messages with generated images, we need special handling
         if (message.role === 'assistant' && message.has_image && message.image_data) {
             // Add the text message first
             const messageElement = await addMessageToUI(
-                message.role, 
-                message.content, 
-                message.timestamp, 
+                message.role,
+                message.content,
+                message.timestamp,
                 true,  // useMarkdown
                 null,  // no fileData yet, we'll add it separately
-                message.model  // pass stored model name
+                message.model,  // pass stored model name
+                message.usage || null  // pass stored usage data
             );
-            
+
             // Now add the image container with download button (same as during generation)
             const messageContent = messageElement.querySelector('.message-content');
             const imageContainer = createImageContainer(message.image_data);
@@ -105,7 +112,7 @@ async function loadConversation(conversationId) {
         } else {
             // Regular message handling (user messages or assistant text without images/documents)
             let fileData = null;
-            
+
             // Check for image attachment
             if (message.image && message.image_type) {
                 fileData = {
@@ -116,7 +123,7 @@ async function loadConversation(conversationId) {
                         isComplete: false  // User uploaded images need data: prefix
                     }
                 };
-            } 
+            }
             // Check for document attachment
             else if (message.document) {
                 fileData = {
@@ -124,18 +131,19 @@ async function loadConversation(conversationId) {
                     data: message.document
                 };
             }
-            
+
             await addMessageToUI(
-                message.role, 
-                message.content, 
-                message.timestamp, 
+                message.role,
+                message.content,
+                message.timestamp,
                 message.role === 'assistant',
                 fileData,
-                message.model  // pass stored model name
+                message.model,  // pass stored model name
+                message.usage || null  // pass stored usage data
             );
         }
     }
-    
+
     scrollToBottom();
 }
 

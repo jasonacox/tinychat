@@ -3,6 +3,45 @@
 let currentConversationId = null;
 let isStreaming = false;
 
+// Running token total for the current conversation
+let conversationTokenTotal = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+
+function updateTokenTotalDisplay() {
+    const wrap = document.getElementById('tokenTotalWrap');
+    const el = document.getElementById('tokenTotal');
+    if (!el || !wrap) return;
+    if (conversationTokenTotal.total_tokens === 0) {
+        wrap.style.display = 'none';
+    } else {
+        wrap.style.display = 'inline';
+        el.textContent = `${conversationTokenTotal.total_tokens.toLocaleString()} tokens used`;
+    }
+}
+
+function resetTokenTotal() {
+    conversationTokenTotal = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+    updateTokenTotalDisplay();
+}
+
+function addToTokenTotal(usage) {
+    conversationTokenTotal.prompt_tokens += usage.prompt_tokens || 0;
+    conversationTokenTotal.completion_tokens += usage.completion_tokens || 0;
+    conversationTokenTotal.total_tokens += usage.total_tokens || 0;
+    updateTokenTotalDisplay();
+}
+
+function recalcTokenTotal(messages) {
+    conversationTokenTotal = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+    for (const msg of messages) {
+        if (msg.usage) {
+            conversationTokenTotal.prompt_tokens += msg.usage.prompt_tokens || 0;
+            conversationTokenTotal.completion_tokens += msg.usage.completion_tokens || 0;
+            conversationTokenTotal.total_tokens += msg.usage.total_tokens || 0;
+        }
+    }
+    updateTokenTotalDisplay();
+}
+
 // Helper function to get current model name for display
 function getCurrentModelName(model = null) {
     // If a specific model is provided (from stored message), use it
@@ -129,7 +168,7 @@ async function sendMessage() {
                 role: m.role,
                 content: m.content
             };
-            
+
             // Only include image data for the most recent N images
             if (imageIndices.includes(index)) {
                 // Include user-uploaded image data if present
@@ -151,15 +190,29 @@ async function sendMessage() {
                     }
                 }
             }
-            
+
             // Only include document data for the most recent N documents
             if (documentIndices.includes(index) && m.document) {
                 msg.document = m.document;
             }
-            
+
             return msg;
         });
-        
+
+        // Prepend system prompt if a preset is selected
+        const systemPromptContent = systemPrompts.getSelectedContent();
+        if (systemPromptContent && systemPrompts.selectedId !== 'none') {
+            // Trim oldest message if needed to stay within server max_conversation_history
+            const maxHistory = appConfig?.max_conversation_history || 50;
+            if (apiMessages.length >= maxHistory) {
+                apiMessages.pop();
+            }
+            apiMessages.unshift({
+                role: 'system',
+                content: systemPromptContent
+            });
+        }
+
         const response = await fetch('/api/chat/stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -167,6 +220,7 @@ async function sendMessage() {
                 messages: apiMessages,  // Send full conversation history with images
                 temperature,
                 model,
+                backend: getCurrentBackend(),
                 session_id: sessionId,
                 rlm: rlm,
                 rlm_passcode: rlm ? rlmSecurity.getCookie(rlmSecurity.cookieName) : null,  // SECURITY: Send passcode for backend validation
@@ -208,11 +262,12 @@ async function sendMessage() {
 async function handleStreamResponse(response, conversation, markdownEnabled, selectedModelName) {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
-    
+
     let assistantMessageElement = null;
     let assistantContent = '';
     let errorOccurred = false;
     let buffer = '';  // Buffer for incomplete lines
+    let usageData = null;  // Token usage from API
     
     try {
         while (true) {
@@ -285,7 +340,12 @@ async function handleStreamResponse(response, conversation, markdownEnabled, sel
                             rlmStatusIndicator.textContent = '🧠 ' + parsed.rlm_status;
                             rlmStatusIndicator.style.display = 'block';
                         }
-                        
+
+                        // Handle token usage data
+                        if (parsed.usage) {
+                            usageData = parsed.usage;
+                        }
+
                         if (parsed.content) {
                             if (!assistantMessageElement) {
                                 assistantMessageElement = await addMessageToUI('assistant', '', null, true);
@@ -356,7 +416,7 @@ async function handleStreamResponse(response, conversation, markdownEnabled, sel
     } finally {
         // Hide RLM status indicator
         document.getElementById('rlmStatus').style.display = 'none';
-        
+
         // Only save assistant message if we got content and no error occurred
         if (assistantContent && !errorOccurred) {
             const assistantMessage = {
@@ -365,7 +425,17 @@ async function handleStreamResponse(response, conversation, markdownEnabled, sel
                 timestamp: new Date().toISOString(),
                 model: selectedModelName  // Store which model generated this response
             };
-            
+
+            // Store token usage if available
+            if (usageData) {
+                assistantMessage.usage = usageData;
+                addToTokenTotal(usageData);
+                // Show token count below the message
+                if (assistantMessageElement) {
+                    appendTokenDisplay(assistantMessageElement, usageData);
+                }
+            }
+
             // If this response included an image, store it for display purposes
             // Mark it so we can filter it out when sending back to API
             if (window._lastGeneratedImage) {
@@ -373,7 +443,7 @@ async function handleStreamResponse(response, conversation, markdownEnabled, sel
                 assistantMessage.has_image = true;
                 window._lastGeneratedImage = null;  // Clear after storing
             }
-            
+
             conversation.messages.push(assistantMessage);
             conversation.last_updated = new Date().toISOString();
             await saveConversation(currentConversationId, conversation);
@@ -381,7 +451,7 @@ async function handleStreamResponse(response, conversation, markdownEnabled, sel
     }
 }
 
-async function addMessageToUI(role, content, timestamp, useMarkdown = false, fileData = null, model = null) {
+async function addMessageToUI(role, content, timestamp, useMarkdown = false, fileData = null, model = null, usage = null) {
     const container = document.getElementById('messages');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
@@ -519,16 +589,32 @@ async function addMessageToUI(role, content, timestamp, useMarkdown = false, fil
     
     messageDiv.appendChild(messageHeader);
     messageDiv.appendChild(messageContent);
-    
+
+    // Show token usage if available (for historical messages)
+    if (usage) {
+        appendTokenDisplay(messageDiv, usage);
+    }
+
     // Clear welcome message if it exists
     if (container.children.length === 1 && container.firstElementChild.style.textAlign === 'center') {
         container.innerHTML = '';
     }
-    
+
     container.appendChild(messageDiv);
     scrollToBottom();
-    
+
     return messageDiv;
+}
+
+function appendTokenDisplay(messageElement, usage) {
+    if (!usage || !usage.total_tokens) return;
+    const tokenDiv = document.createElement('div');
+    tokenDiv.className = 'token-usage';
+    const prompt = usage.prompt_tokens || 0;
+    const completion = usage.completion_tokens || 0;
+    const total = usage.total_tokens || 0;
+    tokenDiv.textContent = `${prompt.toLocaleString()} prompt + ${completion.toLocaleString()} completion = ${total.toLocaleString()} tokens`;
+    messageElement.appendChild(tokenDiv);
 }
 
 function showError(message) {
