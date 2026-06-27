@@ -259,28 +259,32 @@ Answer the user's questions based on the above context."""
     
     @staticmethod
     async def stream_completion(
-        messages: List[Dict], 
+        messages: List[Dict],
         temperature: float = None,
-        model: str = None
+        model: str = None,
+        api_url: str = None,
+        api_key: str = None,
     ) -> AsyncGenerator[str, None]:
         """
         Stream LLM response chunks from an OpenAI-compatible API.
-        
+
         Makes a streaming POST request to the configured LLM API endpoint
         and yields Server-Sent Events formatted chunks as they arrive.
         Handles image attachments for vision-capable models.
-        
+
         Args:
             messages: Full conversation history as list of message dicts
                      with 'role' and 'content' keys. May include optional
                      'image' and 'image_type' fields for vision requests.
             temperature: Sampling temperature (0.0-2.0), controls response randomness
             model: Name of the LLM model to use
-            
+            api_url: Override API base URL (for multi-backend support)
+            api_key: Override API key (for multi-backend support)
+
         Yields:
             str: SSE-formatted data chunks ("data: {json}\n\n")
                 containing either content deltas or error messages
-                
+
         Notes:
             - Handles streaming responses line-by-line
             - Logs detailed request/response information for debugging
@@ -291,6 +295,8 @@ Answer the user's questions based on the above context."""
         """
         temperature = temperature or Settings.DEFAULT_TEMPERATURE
         model = model or Settings.DEFAULT_MODEL
+        api_url = api_url or Settings.OPENAI_API_URL
+        api_key = api_key or Settings.OPENAI_API_KEY
         
         logger.debug(f"Streaming: {len(messages)} messages → model={model}, temp={temperature}")
         
@@ -315,7 +321,7 @@ Answer the user's questions based on the above context."""
         ]
         
         headers = {
-            "Authorization": f"Bearer {Settings.OPENAI_API_KEY}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
         
@@ -329,9 +335,9 @@ Answer the user's questions based on the above context."""
         # Log the complete request details at DEBUG level
         logger.debug("=" * 80)
         logger.debug(f"🚀 MAKING LLM API REQUEST")
-        logger.debug(f"URL: {Settings.OPENAI_API_URL}/chat/completions")
+        logger.debug(f"URL: {api_url}/chat/completions")
         logger.debug(f"Method: POST")
-        logger.debug(f"Headers: {json.dumps({k: v if k != 'Authorization' else f'Bearer ***{v[-4:]}' for k, v in headers.items()}, indent=2)}")
+        logger.debug(f"Headers: {json.dumps({k: (v if k != 'Authorization' else ('Bearer ***' + v[-4:] if len(v) > 10 else 'Bearer ***')) for k, v in headers.items()}, indent=2)}")
         
         # Log payload but truncate base64 image data for readability
         debug_payload = json.loads(json.dumps(payload))
@@ -349,11 +355,11 @@ Answer the user's questions based on the above context."""
         
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                logger.debug(f"Making request to {Settings.OPENAI_API_URL}/chat/completions")
+                logger.debug(f"Making request to {api_url}/chat/completions")
                 
                 async with client.stream(
                     "POST",
-                    f"{Settings.OPENAI_API_URL}/chat/completions",
+                    f"{api_url}/chat/completions",
                     headers=headers,
                     json=payload
                 ) as response:

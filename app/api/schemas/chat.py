@@ -37,24 +37,35 @@ class ChatRequest(BaseModel):
         show_rlm_thinking: Whether to stream RLM thinking process
     """
     messages: List[Dict[str, Any]] = Field(
-        ..., 
-        min_length=1, 
+        ...,
+        min_length=1,
         max_length=Settings.MAX_CONVERSATION_HISTORY
     )
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
     model: Optional[str] = None
+    backend: Optional[str] = None
     session_id: Optional[str] = None
     rlm: Optional[bool] = False
     rlm_passcode: Optional[str] = None
     show_rlm_thinking: Optional[bool] = True
-    
+
     @field_validator('model')
     @classmethod
     def validate_model(cls, v):
-        """Ensure requested model is available."""
-        if v is not None and v not in Settings.AVAILABLE_MODELS:
-            logger.error(f"Invalid model requested: '{v}'. Available models: {', '.join(Settings.AVAILABLE_MODELS)}")
-            raise ValueError(f"Model must be one of: {', '.join(Settings.AVAILABLE_MODELS)}")
+        """
+        Validate model name.
+
+        When multi-backend is configured, models are validated against the
+        selected backend's model list rather than the global AVAILABLE_MODELS.
+        Since pydantic validators don't have access to other field values,
+        we allow any non-empty model string here and validate against the
+        backend in the endpoint handler.
+        """
+        if v is not None and len(Settings.API_BACKENDS) <= 1:
+            # Single-backend mode: strict validation
+            if v not in Settings.AVAILABLE_MODELS:
+                logger.error(f"Invalid model requested: '{v}'. Available models: {', '.join(Settings.AVAILABLE_MODELS)}")
+                raise ValueError(f"Model must be one of: {', '.join(Settings.AVAILABLE_MODELS)}")
         return v
     
     @field_validator('messages')

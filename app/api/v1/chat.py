@@ -42,12 +42,28 @@ async def chat_stream(request: Request, chat_request: ChatRequest = None):
         HTTPException: 500 if API key is not configured
     """
     client_ip = get_client_ip(request)
-    
+
+    # Resolve backend
+    backend = Settings.get_backend(chat_request.backend)
+    if not backend:
+        if chat_request.backend:
+            raise HTTPException(status_code=400, detail=f"Unknown backend: '{chat_request.backend}'")
+        raise HTTPException(status_code=400, detail="No API backend configured")
+
     # Determine which model will be used
     model_to_use = chat_request.model or Settings.DEFAULT_MODEL
     temp_to_use = chat_request.temperature or Settings.DEFAULT_TEMPERATURE
-    
+
+    # Soft model validation: warn if model isn't in the backend's list
+    # (not a hard rejection — some backends like Ollama accept unlisted models)
+    if backend.get("models") and model_to_use not in backend["models"]:
+        logger.warning(
+            f"⚠️  Model '{model_to_use}' not in backend '{backend['name']}' model list "
+            f"(available: {', '.join(backend['models'])})"
+        )
+
     logger.debug(f"Chat stream request from {client_ip}: {len(chat_request.messages)} messages")
+    logger.debug(f"  Backend: {backend['name']}")
     logger.debug(f"  Model: {model_to_use} (requested: {chat_request.model or 'default'})")
     logger.debug(f"  Temperature: {temp_to_use}")
 
@@ -76,10 +92,10 @@ async def chat_stream(request: Request, chat_request: ChatRequest = None):
                     detail="Request contained only system messages. Include at least one user or assistant message."
                 )
     
-    # Validate API key
-    if not Settings.OPENAI_API_KEY:
-        logger.error("API key not configured")
-        raise HTTPException(status_code=500, detail="API key not configured")
+    # Validate API key for the selected backend
+    if not backend["key"]:
+        logger.error(f"API key not configured for backend '{backend['name']}'")
+        raise HTTPException(status_code=500, detail=f"API key not configured for backend '{backend['name']}'")
     
     # Track session if provided
     if chat_request.session_id:
@@ -244,16 +260,18 @@ async def chat_stream(request: Request, chat_request: ChatRequest = None):
     # Standard LLM streaming
     async def stream_response():
         await StateManager.increment_generations()
-        
+
         try:
             # Inject document context for non-RLM mode
             messages_with_docs = LLMService.inject_document_context(chat_request.messages)
-            
+
             assistant_full_content = ""
             async for chunk in LLMService.stream_completion(
-                messages_with_docs, 
-                temp_to_use, 
-                model_to_use
+                messages_with_docs,
+                temp_to_use,
+                model_to_use,
+                api_url=backend["url"],
+                api_key=backend["key"],
             ):
                 yield chunk
                 # Extract content for logging
@@ -264,12 +282,12 @@ async def chat_stream(request: Request, chat_request: ChatRequest = None):
                             assistant_full_content += data['content']
                     except:
                         pass
-            
+
             # Log conversation
             LoggingService.log_conversation(
-                chat_request.messages, 
-                assistant_full_content, 
-                model_to_use, 
+                chat_request.messages,
+                assistant_full_content,
+                model_to_use,
                 temp_to_use
             )
         finally:

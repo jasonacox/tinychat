@@ -34,6 +34,12 @@ async def get_config():
     Returns:
         dict: Configuration object with models, defaults, and feature flags
     """
+    # Expose backends (names and models only — never expose keys)
+    backends = [
+        {"name": b["name"], "models": b["models"]}
+        for b in Settings.API_BACKENDS
+    ]
+
     return {
         "available_models": Settings.AVAILABLE_MODELS,
         "default_model": Settings.DEFAULT_MODEL,
@@ -45,6 +51,7 @@ async def get_config():
         "max_documents_in_context": Settings.MAX_DOCUMENTS_IN_CONTEXT,
         "supported_document_types": Settings.SUPPORTED_DOCUMENT_TYPES,
         "version": Settings.VERSION,
+        "backends": backends,
     }
 
 

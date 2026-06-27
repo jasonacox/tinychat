@@ -181,6 +181,7 @@ async function sendMessage() {
                 messages: apiMessages,  // Send full conversation history with images
                 temperature,
                 model,
+                backend: getCurrentBackend(),
                 session_id: sessionId,
                 rlm: rlm,
                 rlm_passcode: rlm ? rlmSecurity.getCookie(rlmSecurity.cookieName) : null,  // SECURITY: Send passcode for backend validation
