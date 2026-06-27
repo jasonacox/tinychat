@@ -13,39 +13,67 @@ from app.config import Settings
 
 logger = logging.getLogger("tinychat")
 
-# Health check cache (timestamp, result) - cached for 5 seconds
+# Health check cache (timestamp, result) - cached for 30 seconds
 _image_health_cache: Optional[Tuple[float, bool]] = None
+
+_HEALTH_CACHE_TTL = 30.0  # seconds
 
 
 class ImageService:
     """Service for generating images via SwarmUI or OpenAI."""
-    
+
     @staticmethod
     async def check_health() -> bool:
         """
-        Check connectivity to the image generation backend.
-        Results are cached for 5 seconds to prevent DDoS.
-        
+        Check connectivity and backend health of the image generation backend.
+        Results are cached for 30 seconds to avoid excessive polling.
+
+        For SwarmUI: verifies the server is reachable AND that GPU backends are
+        healthy using GetCurrentStatus. Uses POST (SwarmUI rejects GET requests).
+
         Returns:
-            bool: True if image backend is reachable and responding, False otherwise
+            bool: True if image backend is reachable and healthy, False otherwise
         """
         global _image_health_cache
-        
+
         # Check cache
         if _image_health_cache is not None:
             cache_time, cached_result = _image_health_cache
-            if time.time() - cache_time < 5.0:
+            if time.time() - cache_time < _HEALTH_CACHE_TTL:
                 return cached_result
-        
+
         # Perform health check
         try:
             if Settings.IMAGE_PROVIDER == "swarmui":
                 async with aiohttp.ClientSession() as session:
-                    async with session.get(
+                    # Step 1: get a session id (POST required — GET returns 302 to error page)
+                    async with session.post(
                         f"{Settings.SWARMUI.rstrip('/')}/API/GetNewSession",
+                        json={},
                         timeout=aiohttp.ClientTimeout(total=5.0)
                     ) as resp:
-                        result = resp.status == 200
+                        if resp.status != 200:
+                            result = False
+                        else:
+                            data = await resp.json()
+                            session_id = data.get("session_id")
+                            if not session_id:
+                                result = False
+                            else:
+                                # Step 2: check that GPU backends are not in an error state
+                                async with session.post(
+                                    f"{Settings.SWARMUI.rstrip('/')}/API/GetCurrentStatus",
+                                    json={"session_id": session_id},
+                                    timeout=aiohttp.ClientTimeout(total=5.0)
+                                ) as status_resp:
+                                    if status_resp.status != 200:
+                                        result = False
+                                    else:
+                                        status_data = await status_resp.json()
+                                        backend = status_data.get("backend_status", {})
+                                        backend_class = backend.get("class", "unknown")
+                                        # "idle" = healthy; "error" = GPU backend crashed
+                                        result = backend_class not in ("error", "unknown")
             elif Settings.IMAGE_PROVIDER == "openai":
                 # OpenAI image generation uses same API endpoint as LLM
                 # Check if we can reach the API
