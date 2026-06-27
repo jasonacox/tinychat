@@ -3,7 +3,6 @@
 import json
 from unittest.mock import AsyncMock, patch, MagicMock
 
-import httpx
 import pytest
 
 from app.services.llm_service import LLMService
