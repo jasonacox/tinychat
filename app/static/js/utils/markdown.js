@@ -43,6 +43,16 @@ function renderMath(element) {
     }
 }
 
+// Escape LaTeX source for safe insertion into HTML
+function escapeMathHtml(text) {
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 // Process content with markdown and math rendering
 function renderMarkdownWithMath(content) {
     if (typeof marked === 'undefined') {
@@ -92,16 +102,21 @@ function renderMarkdownWithMath(content) {
     html = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
     
     // Step 3: Restore LaTeX blocks
+    // Math is re-inserted AFTER sanitization, so it must be HTML-escaped here or
+    // "$<img src=x onerror=...>$" in a response/document would bypass DOMPurify.
+    // KaTeX auto-render reads text nodes, so escaped entities render correctly.
     let finalHtml = html;
     mathBlocks.forEach((block, index) => {
+        const math = escapeMathHtml(block.content);
         if (block.type === 'display') {
             const placeholder = `MATHBLOCK${index}PLACEHOLDER`;
-            const mathHtml = `\\[${block.content}\\]`;
-            finalHtml = finalHtml.replace(new RegExp(placeholder, 'g'), mathHtml);
+            const mathHtml = `\\[${math}\\]`;
+            // Function replacement: "$&" / "$1" in LaTeX must not be treated as patterns
+            finalHtml = finalHtml.replace(new RegExp(placeholder, 'g'), () => mathHtml);
         } else {
             const placeholder = `MATHINLINE${index}PLACEHOLDER`;
-            const mathHtml = `<span class="math-inline">\\(${block.content}\\)</span>`;
-            finalHtml = finalHtml.replace(new RegExp(placeholder, 'g'), mathHtml);
+            const mathHtml = `<span class="math-inline">\\(${math}\\)</span>`;
+            finalHtml = finalHtml.replace(new RegExp(placeholder, 'g'), () => mathHtml);
         }
     });
     
