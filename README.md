@@ -283,9 +283,9 @@ pip install -r requirements.txt
 # PyPDF2, python-docx, openpyxl, python-pptx, beautifulsoup4, markdownify
 
 # (Optional) Install RLM for Recursive Language Model Support
-# Copy RLM and install it
-COPY rlm/ ./rlm/
-RUN pip install --no-cache-dir ./rlm/
+# Fetch the pinned rlm submodule and install it
+git submodule update --init rlm
+pip install ./rlm/
 # or
 # pip install git+https://github.com/alexzhang13/rlm.git
 
@@ -333,6 +333,9 @@ After updating, test thoroughly and update [THIRD-PARTY-LICENSES.md](THIRD-PARTY
 Build and run using Docker:
 
 ```bash
+# The Dockerfile installs RLM from the rlm/ submodule - fetch it first
+git submodule update --init rlm
+
 # Build image
 docker build -t tinychat:latest .
 
