@@ -52,7 +52,8 @@ async def chat_stream(request: Request, chat_request: ChatRequest = Body(...)):
 
     # Determine which model will be used
     model_to_use = chat_request.model or Settings.DEFAULT_MODEL
-    temp_to_use = chat_request.temperature or Settings.DEFAULT_TEMPERATURE
+    # 0.0 is a valid (deterministic) temperature - only fall back when unset
+    temp_to_use = chat_request.temperature if chat_request.temperature is not None else Settings.DEFAULT_TEMPERATURE
 
     # Soft model validation: warn if model isn't in the backend's list
     # (not a hard rejection — some backends like Ollama accept unlisted models)
