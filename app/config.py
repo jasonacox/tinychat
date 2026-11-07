@@ -27,6 +27,9 @@ class Settings:
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     DEFAULT_MODEL: str = os.getenv("DEFAULT_MODEL", "gpt-3.5-turbo")
     DEFAULT_TEMPERATURE: float = float(os.getenv("DEFAULT_TEMPERATURE", "0.7"))
+    # Seconds to wait for the LLM API to connect / send the next chunk (raise for
+    # large local models whose prompt processing takes longer than 30s)
+    LLM_TIMEOUT: float = float(os.getenv("LLM_TIMEOUT", "30"))
     
     # Security Configuration
     MAX_MESSAGE_LENGTH: int = int(os.getenv("MAX_MESSAGE_LENGTH", "262144"))
@@ -258,6 +261,7 @@ class Settings:
         if len(cls.API_BACKENDS) > 1:
             logger.info(f"  Backends: {', '.join(b['name'] for b in cls.API_BACKENDS)}")
         logger.info(f"  Default Temperature: {cls.DEFAULT_TEMPERATURE}")
+        logger.info(f"  LLM Timeout: {cls.LLM_TIMEOUT}s")
         logger.info(f"  Security: Max message length {cls.MAX_MESSAGE_LENGTH}")
         logger.info(f"  Security: Max conversation history {cls.MAX_CONVERSATION_HISTORY}")
         if cls.ALLOW_SYSTEM_MESSAGES:
