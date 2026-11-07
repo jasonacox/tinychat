@@ -67,6 +67,7 @@ docker run -d \
 | `DEFAULT_MODEL` | `gpt-3.5-turbo` | Default model selection |
 | `AVAILABLE_MODELS` | `gpt-3.5-turbo,gpt-4,gpt-4-turbo` | Comma-separated model list |
 | `DEFAULT_TEMPERATURE` | `0.7` | Default temperature (0.0-2.0) |
+| `LLM_TIMEOUT` | `30` | Seconds to wait for the LLM API to connect or send the next chunk (raise for slow local models) |
 | `PORT` | `8000` | Server listen port |
 | `MAX_MESSAGE_LENGTH` | `8000` | Max characters per message |
 | `MAX_CONVERSATION_HISTORY` | `50` | Max messages per conversation |

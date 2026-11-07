@@ -358,7 +358,7 @@ Answer the user's questions based on the above context."""
             # Attempt up to 2 times: first with stream_options (for token usage),
             # then without if the backend rejects it (e.g. Ollama, older LiteLLM).
             for attempt in range(2):
-                async with httpx.AsyncClient(timeout=30.0) as client:
+                async with httpx.AsyncClient(timeout=Settings.LLM_TIMEOUT) as client:
                     logger.debug(f"Making request to {api_url}/chat/completions (attempt {attempt + 1})")
 
                     async with client.stream(
@@ -441,6 +441,14 @@ Answer the user's questions based on the above context."""
                         logger.debug(f"Stream completed: {line_count} lines received")
                         return  # success — do not retry
                                 
+        except httpx.TimeoutException as e:
+            # str() of httpx timeouts is often empty - give the user something actionable
+            error_msg = (
+                f"The language model did not respond within {Settings.LLM_TIMEOUT:g} seconds "
+                f"({type(e).__name__}). Large or cold-loading models may need a higher LLM_TIMEOUT."
+            )
+            logger.error(error_msg)
+            yield f"data: {json.dumps({'error': error_msg})}\n\n"
         except httpx.HTTPStatusError as e:
             # Read the response content properly for streaming responses
             try:
